@@ -41,7 +41,7 @@ jobs:
           set +e
           # 124 = процесс жив до таймаута, то есть окно успешно запустилось
           QT_QPA_PLATFORM=offscreen timeout 3 build/Cask/cask
-          test "$?" -eq 124
+          test "$?" -eq 124 || { echo "English smoke test failed"; exit 1; }
           # то же с русской системной локалью (интерфейс собирается из перевода)
           LANG=ru_RU.UTF-8 LC_ALL=ru_RU.UTF-8 QT_QPA_PLATFORM=offscreen timeout 3 build/Cask/cask
           test "$?" -eq 124
