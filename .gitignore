@@ -1,0 +1,9 @@
+build/
+.cache/
+.vscode/
+.idea/
+*.user
+CMakeLists.txt.user
+CMakeUserPresets.json
+Cask-src.zip
+*.tar.gz
