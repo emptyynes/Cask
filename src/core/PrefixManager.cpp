@@ -6,9 +6,13 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSet>
+#include <algorithm>
+#include <climits>
 
 namespace {
 
@@ -57,7 +61,80 @@ QList<Prefix> PrefixManager::list() const
     for (const QString& n : names)
         if (auto p = Prefix::load(d.filePath(n)))
             out.append(*p);
+
+    // Порядок пользователя; префиксы, которых в нём нет, идут после, по алфавиту.
+    const QStringList ord = order();
+    auto pos = [&ord](const Prefix& p) {
+        const int i = ord.indexOf(p.name);
+        return i < 0 ? INT_MAX : i;
+    };
+    std::stable_sort(out.begin(), out.end(), [&](const Prefix& a, const Prefix& b) { return pos(a) < pos(b); });
     return out;
+}
+
+QStringList PrefixManager::order() const
+{
+    QFile f(Config::instance().prefixesDir() + "/.cask-order.json");
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+    QStringList out;
+    for (const QJsonValue& v : QJsonDocument::fromJson(f.readAll()).array())
+        if (v.isString())
+            out << v.toString();
+    return out;
+}
+
+bool PrefixManager::setOrder(const QStringList& names)
+{
+    QFile f(Config::instance().prefixesDir() + "/.cask-order.json");
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+    f.write(QJsonDocument(QJsonArray::fromStringList(names)).toJson(QJsonDocument::Indented));
+    return true;
+}
+
+int PrefixManager::unlinkUserDirs(const QString& prefixPath)
+{
+    const QDir users(prefixPath + "/drive_c/users");
+    if (!users.exists())
+        return -1;
+
+    const QString root = QDir::cleanPath(prefixPath);
+    const QString canon = QFileInfo(prefixPath).canonicalFilePath();
+    auto inside = [&](const QString& target) {
+        const QString t = QDir::cleanPath(target);
+        return t.startsWith(root + "/") || (!canon.isEmpty() && t.startsWith(canon + "/"));
+    };
+
+    int replaced = 0;
+    const auto profiles = users.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QFileInfo& profile : profiles) {
+        if (profile.isSymLink())
+            continue;
+        const QDir pd(profile.absoluteFilePath());
+        const auto entries = pd.entryInfoList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot);
+        for (const QFileInfo& e : entries) {
+            // Ссылки внутри префикса (например "My Documents" -> "Documents") не трогаем.
+            if (!e.isSymLink() || inside(e.symLinkTarget()))
+                continue;
+            if (QFile::remove(e.absoluteFilePath())) {  // удаляет саму ссылку, не её цель
+                QDir().mkpath(e.absoluteFilePath());
+                ++replaced;
+            }
+        }
+    }
+    return replaced;
+}
+
+void PrefixManager::isolateUserDirs(const QString& name)
+{
+    auto p = find(name);
+    if (!p || unlinkUserDirs(p->path) < 0)
+        return;  // профиль ещё не создан: попробуем позже
+    if (!p->userDirsIsolated) {
+        p->userDirsIsolated = true;
+        p->save();
+    }
 }
 
 std::optional<Prefix> PrefixManager::find(const QString& name) const
@@ -93,16 +170,15 @@ QProcessEnvironment PrefixManager::makeEnv(const Prefix& p, const Runner& r, boo
     e.insert("MESA_SHADER_CACHE_DIR", mesa);
     e.insert("VKD3D_SHADER_CACHE_PATH", vkd3d);
 
-    // Язык, который видит Wine.
+    // Язык, который видит Wine. Синхронизацию (ntsync и др.) Cask не трогает.
     LaunchSettings::applyLocale(e, p.settings.locale);
 
     if (!forLaunch)
         return e;
 
-    LaunchSettings::applySync(e, p.settings.sync);
-
-    // Свои переменные префикса применяются последними и могут переопределить всё выше,
-    // кроме WINEPREFIX и WINEARCH.
+    // Свои переменные префикса. Переменные, которыми управляет Cask (WINEPREFIX, PATH, язык,
+    // пути кеша...), они не заменяют. Остальные, в том числе WINEDEBUG (Cask лишь ставит
+    // для него значение по умолчанию), применяются.
     for (auto it = p.settings.env.cbegin(); it != p.settings.env.cend(); ++it) {
         if (LaunchSettings::isValidEnvName(it.key()) && !LaunchSettings::isReservedEnvName(it.key()))
             e.insert(it.key(), it.value());
@@ -193,7 +269,11 @@ bool PrefixManager::create(const QString& name, const QString& runner, const QSt
     QProcessEnvironment env = makeEnv(p, *r, false);
     env.insert("WINEDLLOVERRIDES", "mscoree,mshtml=d");  // без диалогов Mono/Gecko
     startJob(p, *r, {"wineboot", "--init"}, env, tr("Prefix '%1' created").arg(name),
-             [this](bool) { emit changed(); });
+             [this, name](bool ok) {
+                 if (ok)
+                     isolateUserDirs(name);  // Desktop, Documents... не ссылаются на домашнюю папку
+                 emit changed();
+             });
     return true;
 }
 
@@ -228,6 +308,9 @@ bool PrefixManager::remove(const QString& name, QString* err)
         emit changed();
         return false;
     }
+    QStringList ord = order();
+    if (ord.removeAll(name) > 0)
+        setOrder(ord);
     emit changed();
     emit message(tr("Prefix '%1' removed").arg(name), true);
     return true;
@@ -252,7 +335,11 @@ bool PrefixManager::setRunner(const QString& name, const QString& runner, QStrin
     }
     emit changed();
     startJob(*p, *r, {"wineboot", "-u"}, makeEnv(*p, *r, false),
-             tr("Wine of prefix '%1' changed to %2").arg(name, runner), [this](bool) { emit changed(); });
+             tr("Wine of prefix '%1' changed to %2").arg(name, runner), [this, name](bool ok) {
+                 if (ok)
+                     isolateUserDirs(name);  // wineboot -u мог создать ссылки заново
+                 emit changed();
+             });
     return true;
 }
 
@@ -454,6 +541,10 @@ bool PrefixManager::launch(const QString& name, const QStringList& wineArgs, con
         return false;
     }
 
+    // Префиксы, созданные раньше: один раз заменяем ссылки на домашние папки обычными.
+    if (!p->userDirsIsolated)
+        isolateUserDirs(name);
+
     QString program = r->wine;
     QStringList args = wineArgs;
     if (game && p->settings.gamemode) {
@@ -490,7 +581,6 @@ bool PrefixManager::setSettings(const QString& name, const PrefixSettings& in, Q
     }
 
     PrefixSettings s = in;
-    s.sync = LaunchSettings::normalizeSync(s.sync);
     s.locale = s.locale.trimmed();
     for (auto it = s.env.cbegin(); it != s.env.cend(); ++it) {
         if (!LaunchSettings::isValidEnvName(it.key())) {

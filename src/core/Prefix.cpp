@@ -27,8 +27,9 @@ bool Prefix::save() const
     }
     o["components"] = comps;
 
+    o["userDirsIsolated"] = userDirsIsolated;
+
     QJsonObject s;
-    s["sync"] = settings.sync;
     s["locale"] = settings.locale;
     s["gamemode"] = settings.gamemode;
     QJsonObject env;
@@ -71,13 +72,18 @@ std::optional<Prefix> Prefix::load(const QString& dir)
         p.components.insert(it.key(), a);
     }
 
+    p.userDirsIsolated = o.value("userDirsIsolated").toBool(false);
+
     // Префиксы из версии 0.1 не имеют "settings": берутся значения по умолчанию.
+    // Старый ключ "sync" игнорируется (выбор синхронизации убран).
     const QJsonObject s = o.value("settings").toObject();
-    p.settings.sync = LaunchSettings::normalizeSync(s.value("sync").toString(QStringLiteral("fsync")));
     p.settings.locale = s.value("locale").toString();
     p.settings.gamemode = s.value("gamemode").toBool(false);
     const QJsonObject env = s.value("env").toObject();
-    for (auto it = env.begin(); it != env.end(); ++it)
-        p.settings.env.insert(it.key(), it.value().toString());
+    for (auto it = env.begin(); it != env.end(); ++it) {
+        // Переменные, которыми управляет Cask, из сохранённых настроек отбрасываются.
+        if (LaunchSettings::isValidEnvName(it.key()) && !LaunchSettings::isReservedEnvName(it.key()))
+            p.settings.env.insert(it.key(), it.value().toString());
+    }
     return p;
 }

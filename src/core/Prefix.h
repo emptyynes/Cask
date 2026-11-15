@@ -25,6 +25,8 @@ struct Prefix {
     QDateTime created;
     QMap<QString, AppliedComponent> components;
     PrefixSettings settings;
+    // Симлинки Desktop/Documents/... на домашнюю папку уже заменены обычными папками.
+    bool userDirsIsolated = false;
 
     QString windowsDir() const { return path + "/drive_c/windows"; }
 

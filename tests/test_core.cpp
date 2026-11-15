@@ -7,6 +7,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -27,6 +28,14 @@ private:
     static Runner systemRunner() { return Runner{QStringLiteral("system"), QStringLiteral("/usr/bin"),
                                                  QStringLiteral("/usr/bin/wine"), true}; }
 
+    static void writeFile(const QString& path, const QByteArray& data)
+    {
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write(data);
+    }
+
 private slots:
     void initTestCase()
     {
@@ -35,61 +44,59 @@ private slots:
         Config::instance().ensureLayout();
     }
 
+    // ---- настройки префикса ----
+
     void prefixSettingsRoundTrip()
     {
         Prefix p = makePrefix("roundtrip");
-        p.settings.sync = "ntsync";
         p.settings.locale = "ru_RU.UTF-8";
         p.settings.gamemode = true;
         p.settings.env = {{"DXVK_HUD", "fps"}, {"MANGOHUD", "1"}};
+        p.userDirsIsolated = true;
         QVERIFY(p.save());
 
         const auto loaded = Prefix::load(p.path);
         QVERIFY(loaded.has_value());
         QCOMPARE(loaded->settings, p.settings);
+        QVERIFY(loaded->userDirsIsolated);
     }
 
-    void oldPrefixWithoutSettingsLoadsDefaults()
+    void oldPrefixLoadsWithDefaults()
     {
+        // Префикс версии 0.1 + устаревший ключ sync + переменная, которой теперь управляет Cask.
         Prefix p = makePrefix("legacy");
-        QFile f(p.path + "/cask.json");
-        QVERIFY(f.open(QIODevice::WriteOnly));
-        f.write(R"({"runner":"system","arch":"win64","created":"2026-01-01T00:00:00","components":{}})");
-        f.close();
+        writeFile(p.path + "/cask.json",
+                  R"({"runner":"system","arch":"win64","created":"2026-01-01T00:00:00","components":{},
+                      "settings":{"sync":"esync","env":{"LANG":"C","KEEP":"1","bad name":"x"}}})");
 
         const auto loaded = Prefix::load(p.path);
         QVERIFY(loaded.has_value());
-        QCOMPARE(loaded->settings.sync, QString("fsync"));
         QVERIFY(loaded->settings.locale.isEmpty());
         QVERIFY(!loaded->settings.gamemode);
-        QVERIFY(loaded->settings.env.isEmpty());
+        QVERIFY(!loaded->userDirsIsolated);
+        QCOMPARE(loaded->settings.env, (QMap<QString, QString>{{"KEEP", "1"}}));
     }
 
-    void syncModes_data()
-    {
-        QTest::addColumn<QString>("mode");
-        QTest::addColumn<QString>("esync");
-        QTest::addColumn<QString>("fsync");
-        QTest::addColumn<QString>("ntsync");
-        QTest::newRow("none") << "none" << "0" << "0" << "0";
-        QTest::newRow("esync") << "esync" << "1" << "0" << "0";
-        QTest::newRow("fsync") << "fsync" << "0" << "1" << "0";
-        QTest::newRow("ntsync") << "ntsync" << "0" << "0" << "1";
-        QTest::newRow("garbage falls back to fsync") << "bogus" << "0" << "1" << "0";
-    }
-    void syncModes()
-    {
-        QFETCH(QString, mode);
-        QFETCH(QString, esync);
-        QFETCH(QString, fsync);
-        QFETCH(QString, ntsync);
+    // ---- окружение ----
 
-        Prefix p = makePrefix("sync");
-        p.settings.sync = mode;
+    void cacheLivesInsidePrefix()
+    {
+        Prefix p = makePrefix("cache");
+        const QProcessEnvironment e = PrefixManager::makeEnv(p, systemRunner(), false);
+        QCOMPARE(e.value("DXVK_SHADER_CACHE_PATH"), p.path + "/cache/dxvk_shader");
+        QCOMPARE(e.value("DXVK_STATE_CACHE_PATH"), p.path + "/cache/dxvk_shader");
+        QCOMPARE(e.value("MESA_SHADER_CACHE_DIR"), p.path + "/cache/mesa_shader");
+        QCOMPARE(e.value("VKD3D_SHADER_CACHE_PATH"), p.path + "/cache/vkd3d_shader");
+        QVERIFY(QDir(p.path + "/cache/mesa_shader").exists());
+    }
+
+    void cask_doesNotTouchSyncVariables()
+    {
+        Prefix p = makePrefix("nosync");
+        const QProcessEnvironment sys = QProcessEnvironment::systemEnvironment();
         const QProcessEnvironment e = PrefixManager::makeEnv(p, systemRunner(), true);
-        QCOMPARE(e.value("WINEESYNC"), esync);
-        QCOMPARE(e.value("WINEFSYNC"), fsync);
-        QCOMPARE(e.value("WINENTSYNC"), ntsync);
+        for (const char* v : {"WINEESYNC", "WINEFSYNC", "WINENTSYNC", "WINE_DISABLE_FAST_SYNC"})
+            QCOMPARE(e.value(v), sys.value(v));
     }
 
     void localeIsPassedToWine()
@@ -112,22 +119,37 @@ private slots:
         QCOMPARE(e.value("LC_ALL"), sys.value("LC_ALL"));
     }
 
-    void userEnvOverridesButNotReserved()
+    void userEnvNeverReplacesCaskVariables()
     {
-        Prefix p = makePrefix("userenv");
-        p.settings.env = {{"DXVK_HUD", "fps"},
-                          {"WINEDEBUG", "+timestamp"},
-                          {"WINEFSYNC", "0"},  // переопределяет настройку синхронизации
-                          {"WINEPREFIX", "/evil"},
-                          {"WINEARCH", "win32"},
-                          {"BAD NAME", "x"}};
-        p.settings.sync = "fsync";
+        Prefix p = makePrefix("protected");
+        p.settings.locale = "ru_RU.UTF-8";
+        // Все защищённые имена пробуем подменить.
+        for (const QString& name : LaunchSettings::reservedEnvNames())
+            p.settings.env.insert(name, "/hacked");
+        p.settings.env.insert("DXVK_HUD", "fps");
+
         const QProcessEnvironment e = PrefixManager::makeEnv(p, systemRunner(), true);
-        QCOMPARE(e.value("DXVK_HUD"), QString("fps"));
-        QCOMPARE(e.value("WINEDEBUG"), QString("+timestamp"));
-        QCOMPARE(e.value("WINEFSYNC"), QString("0"));
         QCOMPARE(e.value("WINEPREFIX"), p.path);
         QCOMPARE(e.value("WINEARCH"), p.arch);
+        QCOMPARE(e.value("LANG"), QString("ru_RU.UTF-8"));
+        QCOMPARE(e.value("LC_ALL"), QString("ru_RU.UTF-8"));
+        QCOMPARE(e.value("DXVK_SHADER_CACHE_PATH"), p.path + "/cache/dxvk_shader");
+        QCOMPARE(e.value("DXVK_STATE_CACHE_PATH"), p.path + "/cache/dxvk_shader");
+        QCOMPARE(e.value("MESA_SHADER_CACHE_DIR"), p.path + "/cache/mesa_shader");
+        QCOMPARE(e.value("VKD3D_SHADER_CACHE_PATH"), p.path + "/cache/vkd3d_shader");
+        QVERIFY(e.value("PATH") != QString("/hacked"));
+        // а обычные переменные применяются
+        QCOMPARE(e.value("DXVK_HUD"), QString("fps"));
+    }
+
+    void userEnvAppliesOrdinaryVariables()
+    {
+        Prefix p = makePrefix("userenv");
+        p.settings.env = {{"WINEDEBUG", "+timestamp"}, {"WINEDLLOVERRIDES", "winemenubuilder.exe=d"},
+                          {"BAD NAME", "x"}};
+        const QProcessEnvironment e = PrefixManager::makeEnv(p, systemRunner(), true);
+        QCOMPARE(e.value("WINEDEBUG"), QString("+timestamp"));  // у Cask лишь значение по умолчанию
+        QCOMPARE(e.value("WINEDLLOVERRIDES"), QString("winemenubuilder.exe=d"));
         QVERIFY(!e.contains("BAD NAME"));
     }
 
@@ -139,17 +161,6 @@ private slots:
         QVERIFY(e.value("LD_PRELOAD") != QString("/nonexistent.so"));
     }
 
-    void cacheLivesInsidePrefix()
-    {
-        Prefix p = makePrefix("cache");
-        const QProcessEnvironment e = PrefixManager::makeEnv(p, systemRunner(), false);
-        QCOMPARE(e.value("DXVK_SHADER_CACHE_PATH"), p.path + "/cache/dxvk_shader");
-        QCOMPARE(e.value("DXVK_STATE_CACHE_PATH"), p.path + "/cache/dxvk_shader");
-        QCOMPARE(e.value("MESA_SHADER_CACHE_DIR"), p.path + "/cache/mesa_shader");
-        QCOMPARE(e.value("VKD3D_SHADER_CACHE_PATH"), p.path + "/cache/vkd3d_shader");
-        QVERIFY(QDir(p.path + "/cache/mesa_shader").exists());
-    }
-
     void envNameValidation()
     {
         QVERIFY(LaunchSettings::isValidEnvName("DXVK_HUD"));
@@ -159,6 +170,9 @@ private slots:
         QVERIFY(!LaunchSettings::isValidEnvName("A-B"));
         QVERIFY(!LaunchSettings::isValidEnvName("A B"));
         QVERIFY(LaunchSettings::isReservedEnvName("WINEPREFIX"));
+        QVERIFY(LaunchSettings::isReservedEnvName("LC_ALL"));
+        QVERIFY(LaunchSettings::isReservedEnvName("MESA_SHADER_CACHE_DIR"));
+        QVERIFY(!LaunchSettings::isReservedEnvName("DXVK_HUD"));
         QVERIFY(!LaunchSettings::isReservedEnvName("WINEDEBUG"));
     }
 
@@ -169,7 +183,7 @@ private slots:
         PrefixManager mgr;
 
         PrefixSettings s;
-        s.sync = "esync";
+        s.gamemode = true;
         s.env = {{"FOO", "bar"}};
         QString err;
         QVERIFY2(mgr.setSettings("manager", s, &err), qPrintable(err));
@@ -178,12 +192,81 @@ private slots:
         PrefixSettings bad = s;
         bad.env = {{"WINEPREFIX", "/x"}};
         QVERIFY(!mgr.setSettings("manager", bad, &err));
+        bad.env = {{"LANG", "C"}};  // язык меняется отдельной настройкой
+        QVERIFY(!mgr.setSettings("manager", bad, &err));
         bad.env = {{"NOT VALID", "x"}};
         QVERIFY(!mgr.setSettings("manager", bad, &err));
         QCOMPARE(mgr.find("manager")->settings, s);  // неудачные попытки ничего не меняют
 
         QVERIFY(!mgr.setSettings("missing", s, &err));
     }
+
+    // ---- папки профиля Wine ----
+
+    void userDirsAreUnlinkedFromHome()
+    {
+        Prefix p = makePrefix("isolate");
+        const QString home = m_dir.path() + "/fake-home";
+        writeFile(home + "/Desktop/keep.txt", "mine");
+        writeFile(home + "/Documents/keep.txt", "mine");
+
+        const QString user = p.path + "/drive_c/users/tester";
+        QDir().mkpath(user + "/AppData");
+        QVERIFY(QFile::link(home + "/Desktop", user + "/Desktop"));
+        QVERIFY(QFile::link(home + "/Documents", user + "/Documents"));
+        QVERIFY(QFile::link(home + "/Nowhere", user + "/Downloads"));         // битая ссылка наружу
+        QVERIFY(QFile::link(user + "/Documents", user + "/My Documents"));    // ссылка внутри префикса
+
+        QCOMPARE(PrefixManager::unlinkUserDirs(p.path), 3);
+
+        for (const char* d : {"Desktop", "Documents", "Downloads"}) {
+            const QFileInfo fi(user + "/" + d);
+            QVERIFY2(fi.isDir() && !fi.isSymLink(), d);
+            QVERIFY2(QDir(fi.absoluteFilePath()).isEmpty(), d);  // пустая обычная папка
+        }
+        // файлы пользователя по ссылкам не тронуты
+        QVERIFY(QFile::exists(home + "/Desktop/keep.txt"));
+        QVERIFY(QFile::exists(home + "/Documents/keep.txt"));
+        // ссылка внутри префикса осталась
+        QVERIFY(QFileInfo(user + "/My Documents").isSymLink());
+        QVERIFY(QDir(user + "/AppData").exists());
+
+        QCOMPARE(PrefixManager::unlinkUserDirs(p.path), 0);  // повторный вызов ничего не меняет
+    }
+
+    void unlinkUserDirsWithoutProfile()
+    {
+        Prefix p = makePrefix("noprofile");
+        QCOMPARE(PrefixManager::unlinkUserDirs(p.path), -1);
+    }
+
+    // ---- порядок префиксов ----
+
+    void prefixOrderIsRememberedAndNewOnesGoLast()
+    {
+        for (const char* n : {"ord_a", "ord_b", "ord_c"})
+            QVERIFY(makePrefix(n).save());
+        PrefixManager mgr;
+
+        auto positions = [&mgr] {
+            QStringList names;
+            for (const Prefix& p : mgr.list())
+                if (p.name.startsWith("ord_"))
+                    names << p.name;
+            return names;
+        };
+
+        QCOMPARE(positions(), (QStringList{"ord_a", "ord_b", "ord_c"}));  // по алфавиту
+        QVERIFY(mgr.setOrder({"ord_c", "ord_a", "ord_b"}));
+        QCOMPARE(positions(), (QStringList{"ord_c", "ord_a", "ord_b"}));
+
+        QVERIFY(makePrefix("ord_d").save());  // новый, его нет в порядке
+        QCOMPARE(positions(), (QStringList{"ord_c", "ord_a", "ord_b", "ord_d"}));
+
+        QCOMPARE(mgr.order(), (QStringList{"ord_c", "ord_a", "ord_b"}));
+    }
+
+    // ---- переводы ----
 
     void languagesAreAvailable()
     {
@@ -198,14 +281,15 @@ private slots:
 
     void russianTranslationWorksAndEnglishRestores()
     {
-        const QString src = "Settings";
         QVERIFY(I18n::apply("ru"));
         QCOMPARE(I18n::currentCode(), QString("ru"));
         QCOMPARE(QCoreApplication::translate("X", "Settings"), QString::fromUtf8("Настройки"));
-        QCOMPARE(QCoreApplication::translate("X", "Applied: %1").arg("DXVK"), QString::fromUtf8("Применён: DXVK"));
+        QCOMPARE(QCoreApplication::translate("X", "None"), QString::fromUtf8("Никакой"));
+        QCOMPARE(QCoreApplication::translate("X", "Explorer"), QString::fromUtf8("Проводник"));
+        QCOMPARE(QCoreApplication::translate("X", "Control panel"), QString::fromUtf8("Панель управления"));
 
         QVERIFY(I18n::apply("en"));
-        QCOMPARE(QCoreApplication::translate("X", "Settings"), src);
+        QCOMPARE(QCoreApplication::translate("X", "Settings"), QString("Settings"));
         QCOMPARE(I18n::currentCode(), QString("en"));
     }
 
@@ -218,10 +302,8 @@ private slots:
 
     void externalLanguageFileOverridesAndExtends()
     {
-        QFile f(Config::instance().langDir() + "/de.json");
-        QVERIFY(f.open(QIODevice::WriteOnly));
-        f.write(R"({"_name":"Deutsch","Settings":"Einstellungen"})");
-        f.close();
+        writeFile(Config::instance().langDir() + "/de.json",
+                  R"({"_name":"Deutsch","Settings":"Einstellungen"})");
 
         bool hasDe = false;
         for (const auto& l : I18n::available())

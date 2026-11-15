@@ -1,6 +1,5 @@
 #include "LaunchSettings.h"
 
-#include <QFileInfo>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -18,19 +17,6 @@ QString normLocale(QString s)
 
 }  // namespace
 
-const QStringList& syncModes()
-{
-    static const QStringList m{QStringLiteral("none"), QStringLiteral("esync"), QStringLiteral("fsync"),
-                               QStringLiteral("ntsync")};
-    return m;
-}
-
-QString normalizeSync(const QString& mode)
-{
-    const QString m = mode.trimmed().toLower();
-    return syncModes().contains(m) ? m : QStringLiteral("fsync");
-}
-
 QStringList localePresets()
 {
     return {QStringLiteral("en_US.UTF-8"), QStringLiteral("ru_RU.UTF-8"), QStringLiteral("uk_UA.UTF-8"),
@@ -46,20 +32,26 @@ bool isValidEnvName(const QString& name)
     return re.match(name).hasMatch();
 }
 
-bool isReservedEnvName(const QString& name)
+const QStringList& reservedEnvNames()
 {
-    return name == QLatin1String("WINEPREFIX") || name == QLatin1String("WINEARCH");
+    // Должен совпадать с тем, что выставляет PrefixManager::makeEnv.
+    static const QStringList names{
+        QStringLiteral("WINEPREFIX"),
+        QStringLiteral("WINEARCH"),
+        QStringLiteral("PATH"),
+        QStringLiteral("LANG"),
+        QStringLiteral("LC_ALL"),
+        QStringLiteral("DXVK_STATE_CACHE_PATH"),
+        QStringLiteral("DXVK_SHADER_CACHE_PATH"),
+        QStringLiteral("MESA_SHADER_CACHE_DIR"),
+        QStringLiteral("VKD3D_SHADER_CACHE_PATH"),
+    };
+    return names;
 }
 
-void applySync(QProcessEnvironment& env, const QString& mode)
+bool isReservedEnvName(const QString& name)
 {
-    const QString m = normalizeSync(mode);
-    const auto flag = [&](const char* mine) { return m == QLatin1String(mine) ? QStringLiteral("1") : QStringLiteral("0"); };
-    env.insert(QStringLiteral("WINEESYNC"), flag("esync"));
-    env.insert(QStringLiteral("WINEFSYNC"), flag("fsync"));
-    env.insert(QStringLiteral("WINENTSYNC"), flag("ntsync"));
-    if (m == QLatin1String("ntsync"))
-        env.insert(QStringLiteral("WINE_DISABLE_FAST_SYNC"), QStringLiteral("0"));
+    return reservedEnvNames().contains(name);
 }
 
 void applyLocale(QProcessEnvironment& env, const QString& locale)
@@ -69,12 +61,6 @@ void applyLocale(QProcessEnvironment& env, const QString& locale)
         return;
     env.insert(QStringLiteral("LANG"), l);
     env.insert(QStringLiteral("LC_ALL"), l);
-}
-
-bool ntsyncAvailable()
-{
-    const QFileInfo fi(QStringLiteral("/dev/ntsync"));
-    return fi.exists() && fi.isReadable() && fi.isWritable();
 }
 
 QString gamemodeBinary()

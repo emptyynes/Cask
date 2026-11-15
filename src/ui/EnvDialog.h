@@ -28,8 +28,9 @@ public:
 
         auto* hint = new QLabel(
             tr("These variables are passed to Wine and to programs started in this prefix. "
-               "They override Cask's own settings (synchronization, language, cache paths), "
-               "except WINEPREFIX and WINEARCH."));
+               "Variables that Cask manages itself cannot be overridden: %1. "
+               "Use the Wine language setting to change the language.")
+                .arg(LaunchSettings::reservedEnvNames().join(QStringLiteral(", "))));
         hint->setWordWrap(true);
         v->addWidget(hint);
 

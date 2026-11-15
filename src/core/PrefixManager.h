@@ -14,8 +14,18 @@ class PrefixManager : public QObject {
 public:
     explicit PrefixManager(QObject* parent = nullptr);
 
+    // Список в порядке, заданном пользователем (setOrder); новые префиксы в конце.
     QList<Prefix> list() const;
     std::optional<Prefix> find(const QString& name) const;
+
+    // Порядок префиксов хранится рядом с ними: <папка префиксов>/.cask-order.json
+    QStringList order() const;
+    bool setOrder(const QStringList& names);
+
+    // Заменяет симлинки Desktop, Documents, Downloads... в профиле Wine, ведущие за пределы
+    // префикса (в домашнюю папку), обычными пустыми папками. Файлы по ссылкам не трогает.
+    // Возвращает число замен, -1 если профиль ещё не создан.
+    static int unlinkUserDirs(const QString& prefixPath);
 
     // Создаёт папку префикса и в фоне запускает wineboot --init.
     bool create(const QString& name, const QString& runner, const QString& arch, QString* err);
@@ -37,7 +47,8 @@ public:
     bool setSettings(const QString& name, const PrefixSettings& settings, QString* err);
 
     // Окружение для wine. forLaunch = false: внутренние задачи (wineboot, regedit),
-    // только база, кеш и язык. true: запуск пользователем, плюс синхронизация и свои переменные.
+    // только база, кеш и язык. true: запуск пользователем, плюс свои переменные
+    // (они не заменяют переменные, которыми управляет Cask).
     static QProcessEnvironment makeEnv(const Prefix& p, const Runner& r, bool forLaunch);
 
     bool isBusy() const { return m_jobs > 0; }
@@ -48,6 +59,7 @@ signals:
     void message(const QString& text, bool ok);
 
 private:
+    void isolateUserDirs(const QString& name);  // unlinkUserDirs + пометка в cask.json
     void startJob(const Prefix& p, const Runner& r, const QStringList& args, const QProcessEnvironment& env,
                   const QString& okMsg, std::function<void(bool)> after = {}, const QString& workDir = {});
     void importOverrides(const Prefix& p, const Runner& r, const QStringList& setNative,

@@ -8,6 +8,7 @@
 #include "ui/NewPrefixDialog.h"
 #include "ui/SettingsDialog.h"
 
+#include <QAbstractItemModel>
 #include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
@@ -25,19 +26,54 @@
 #include <QLocale>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPainter>
+#include <QPixmap>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSplitter>
 #include <QStatusBar>
+#include <QTimer>
 #include <QToolBar>
 #include <QUrl>
 #include <QVBoxLayout>
 
+namespace {
+
+// Круглая «аватарка» с первой буквой имени; цвет зависит от имени (одинаков при каждом запуске).
+QIcon avatarIcon(const QString& name, int size, qreal dpr)
+{
+    uint h = 7;
+    for (const QChar c : name)
+        h = h * 31 + c.unicode();
+
+    QPixmap pm(QSize(size, size) * dpr);
+    pm.setDevicePixelRatio(dpr);
+    pm.fill(Qt::transparent);
+
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setRenderHint(QPainter::TextAntialiasing);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor::fromHsl(static_cast<int>(h % 360), 120, 115));
+    p.drawEllipse(QRectF(0, 0, size, size));
+
+    QFont f = p.font();
+    f.setBold(true);
+    f.setPixelSize(static_cast<int>(size * 0.46));
+    p.setFont(f);
+    p.setPen(Qt::white);
+    p.drawText(QRectF(0, 0, size, size), Qt::AlignCenter, name.left(1).toUpper());
+    p.end();
+    return QIcon(pm);
+}
+
+}  // namespace
+
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
     setWindowTitle(QStringLiteral("Cask"));
-    resize(980, 740);
+    resize(1020, 760);
 
     m_busy = new QProgressBar;
     m_busy->setRange(0, 0);
@@ -75,15 +111,46 @@ void MainWindow::buildUi()
     addAct(tr("Refresh"), &MainWindow::refresh);
     addAct(tr("Settings"), &MainWindow::openSettings);
 
-    // Центр: список слева, детали справа
+    // Центр: список префиксов слева, детали справа
     m_central = new QSplitter(this);
+    m_central->setChildrenCollapsible(false);
+    m_central->setHandleWidth(1);
+
+    auto* left = new QWidget;
+    left->setMinimumWidth(230);
+    auto* lv = new QVBoxLayout(left);
+    lv->setContentsMargins(14, 14, 8, 14);
+    lv->setSpacing(10);
+
+    auto* listTitle = new QLabel(tr("Prefixes"));
+    listTitle->setStyleSheet(QStringLiteral("font-weight: 600; padding-left: 4px;"));
+    lv->addWidget(listTitle);
+
     m_list = new QListWidget;
-    m_list->setMinimumWidth(220);
+    m_list->setFrameShape(QFrame::NoFrame);
+    m_list->setIconSize(QSize(30, 30));
+    m_list->setSpacing(2);
+    m_list->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_list->setDragEnabled(true);
+    m_list->setAcceptDrops(true);
+    m_list->setDropIndicatorShown(true);
+    m_list->setDragDropMode(QAbstractItemView::InternalMove);
+    m_list->setDefaultDropAction(Qt::MoveAction);
+    m_list->setToolTip(tr("Drag prefixes to change their order"));
+    m_list->setStyleSheet(QStringLiteral(
+        "QListWidget { background: transparent; outline: 0; }"
+        "QListWidget::item { padding: 8px 10px; border-radius: 8px; }"
+        "QListWidget::item:hover:!selected { background: rgba(127, 127, 127, 40); }"
+        "QListWidget::item:selected { background: palette(highlight); color: palette(highlighted-text); }"));
     connect(m_list, &QListWidget::currentRowChanged, this, [this](int) { onSelected(); });
-    m_central->addWidget(m_list);
+    connect(m_list->model(), &QAbstractItemModel::rowsMoved, this, [this] { saveOrder(); });
+    lv->addWidget(m_list, 1);
+    m_central->addWidget(left);
 
     m_details = new QWidget;
     auto* v = new QVBoxLayout(m_details);
+    v->setContentsMargins(12, 14, 16, 14);
+    v->setSpacing(12);
 
     auto* info = new QGroupBox(tr("Prefix"));
     auto* form = new QFormLayout(info);
@@ -104,6 +171,7 @@ void MainWindow::buildUi()
     form->addRow(tr("Wine"), runnerRow);
     v->addWidget(info);
 
+    // Компоненты: «Никакой» по умолчанию; выбор версии применяет её, «Никакой» снимает.
     auto* comps = new QGroupBox(tr("Components"));
     auto* grid = new QGridLayout(comps);
     int row = 0;
@@ -111,44 +179,28 @@ void MainWindow::buildUi()
         CompRow cr;
         cr.type = t.id;
         cr.versions = new QComboBox;
-        cr.apply = new QPushButton(tr("Apply"));
-        cr.remove = new QPushButton(tr("Remove"));
-        cr.state = new QLabel;
+        cr.hint = new QLabel;
+        cr.hint->setEnabled(false);  // приглушённый цвет
+        cr.hint->setWordWrap(true);
         grid->addWidget(new QLabel(t.title), row, 0);
         grid->addWidget(cr.versions, row, 1);
-        grid->addWidget(cr.apply, row, 2);
-        grid->addWidget(cr.remove, row, 3);
-        grid->addWidget(cr.state, row, 4);
+        grid->addWidget(cr.hint, row, 2);
         const QString type = t.id;
-        connect(cr.apply, &QPushButton::clicked, this, [this, type] { applyComponent(type); });
-        connect(cr.remove, &QPushButton::clicked, this, [this, type] { removeComponent(type); });
+        // activated срабатывает только от действий пользователя, не при заполнении списка.
+        // Обработчик откладываем, чтобы не перестраивать список внутри его же сигнала.
+        connect(cr.versions, QOverload<int>::of(&QComboBox::activated), this, [this, type](int) {
+            QTimer::singleShot(0, this, [this, type] { componentChosen(type); });
+        });
         m_rows.append(cr);
         ++row;
     }
-    grid->setColumnStretch(1, 1);
-    grid->setColumnStretch(4, 1);
+    grid->setColumnStretch(1, 2);
+    grid->setColumnStretch(2, 3);
     v->addWidget(comps);
 
     // Настройки запуска
     auto* launch = new QGroupBox(tr("Launch settings"));
     auto* lf = new QFormLayout(launch);
-
-    m_syncBox = new QComboBox;
-    m_syncBox->addItem(tr("None"), QStringLiteral("none"));
-    m_syncBox->addItem(QStringLiteral("Esync"), QStringLiteral("esync"));
-    m_syncBox->addItem(QStringLiteral("Fsync"), QStringLiteral("fsync"));
-    m_syncBox->addItem(QStringLiteral("NTsync"), QStringLiteral("ntsync"));
-    m_syncBox->setToolTip(
-        tr("Synchronization primitives used by Wine. The selected mode is switched on and the "
-           "others are switched off. A mode only works if your Wine build supports it."));
-    m_syncWarn = new QLabel;
-    m_syncWarn->setWordWrap(true);
-    m_syncWarn->hide();
-    auto* syncCol = new QVBoxLayout;
-    syncCol->setContentsMargins(0, 0, 0, 0);
-    syncCol->addWidget(m_syncBox);
-    syncCol->addWidget(m_syncWarn);
-    lf->addRow(tr("Synchronization"), syncCol);
 
     m_localeBox = new QComboBox;
     m_localeBox->setEditable(true);
@@ -181,7 +233,6 @@ void MainWindow::buildUi()
     lf->addRow(tr("Environment"), m_envBtn);
     updateEnvButton();
 
-    connect(m_syncBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { saveSettings(); });
     connect(m_localeBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { saveSettings(); });
     connect(m_localeBox->lineEdit(), &QLineEdit::editingFinished, this, [this] { saveSettings(); });
     connect(m_gamemode, &QCheckBox::toggled, this, [this] { saveSettings(); });
@@ -198,6 +249,9 @@ void MainWindow::buildUi()
         QAction* a = menu->addAction(text);
         connect(a, &QAction::triggered, this, [this, args] { runTool(args); });
     };
+    addTool(tr("Explorer"), {"explorer"});
+    addTool(tr("Control panel"), {"control"});
+    menu->addSeparator();
     addTool(tr("Wine configuration (winecfg)"), {"winecfg"});
     addTool(tr("Registry editor (regedit)"), {"regedit"});
     addTool(tr("Add/remove programs"), {"uninstaller"});
@@ -220,7 +274,9 @@ void MainWindow::buildUi()
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setWidget(m_details);
     m_central->addWidget(scroll);
+    m_central->setStretchFactor(0, 0);
     m_central->setStretchFactor(1, 1);
+    m_central->setSizes({270, 750});
     setCentralWidget(m_central);
     m_central->setEnabled(!m_mgr.isBusy());
 }
@@ -254,15 +310,25 @@ void MainWindow::selectByName(const QString& name)
     }
 }
 
+void MainWindow::saveOrder()
+{
+    QStringList names;
+    for (int i = 0; i < m_list->count(); ++i)
+        names << m_list->item(i)->data(Qt::UserRole).toString();
+    m_mgr.setOrder(names);
+}
+
 void MainWindow::refresh()
 {
     const QString keep = currentName();
     {
         const QSignalBlocker blocker(m_list);
         m_list->clear();
+        const qreal dpr = devicePixelRatioF();
         for (const Prefix& p : m_mgr.list()) {
-            auto* it = new QListWidgetItem(p.name);
+            auto* it = new QListWidgetItem(avatarIcon(p.name, m_list->iconSize().width(), dpr), p.name);
             it->setData(Qt::UserRole, p.name);
+            it->setSizeHint(QSize(0, 46));
             m_list->addItem(it);
         }
         if (!keep.isEmpty())
@@ -292,13 +358,6 @@ void MainWindow::setLocaleValue(const QString& value)
 
 void MainWindow::updateWarnings()
 {
-    const bool ntBad = m_syncBox->currentData().toString() == QLatin1String("ntsync") &&
-                       !LaunchSettings::ntsyncAvailable();
-    m_syncWarn->setText(
-        tr("Warning: /dev/ntsync is missing or not accessible. NTsync needs Linux 6.14 or newer "
-           "with the ntsync module and a Wine build that supports it."));
-    m_syncWarn->setVisible(ntBad);
-
     const QString loc = localeValue();
     const bool locBad = !loc.isEmpty() && !LaunchSettings::localeInstalled(loc);
     m_localeWarn->setText(
@@ -324,12 +383,11 @@ void MainWindow::onSelected()
         m_runnerBox->clear();
         for (CompRow& cr : m_rows) {
             cr.versions->clear();
-            cr.state->clear();
+            cr.hint->clear();
         }
         m_loading = true;
         m_env.clear();
         updateEnvButton();
-        m_syncBox->setCurrentIndex(m_syncBox->findData(QStringLiteral("fsync")));
         setLocaleValue(QString());
         m_gamemode->setChecked(false);
         m_loading = false;
@@ -354,34 +412,59 @@ void MainWindow::onSelected()
     for (CompRow& cr : m_rows) {
         const QStringList vers = Components::versions(cr.type);
         cr.versions->clear();
-        cr.versions->addItems(vers);
-        cr.versions->setEnabled(!vers.isEmpty());
-        cr.apply->setEnabled(!vers.isEmpty());
-        if (vers.isEmpty())
-            cr.versions->setToolTip(tr("Put version folders into %1").arg(Config::instance().componentsDir(cr.type)));
+        cr.versions->addItem(tr("None"), QString());
+        for (const QString& v : vers)
+            cr.versions->addItem(v, v);
 
+        // Показываем реально применённую версию; если её папки в data уже нет, добавляем пункт.
         const auto it = p.components.constFind(cr.type);
+        int sel = 0;
         if (it != p.components.constEnd()) {
-            cr.state->setText(tr("Applied: %1").arg(it->version));
-            const int vi = cr.versions->findText(it->version);
-            if (vi >= 0)
-                cr.versions->setCurrentIndex(vi);
-            cr.remove->setEnabled(true);
-        } else {
-            cr.state->setText(tr("Not applied"));
-            cr.remove->setEnabled(false);
+            sel = cr.versions->findData(it->version);
+            if (sel < 0) {
+                cr.versions->addItem(tr("%1 (not found)").arg(it->version), it->version);
+                sel = cr.versions->count() - 1;
+            }
         }
+        cr.versions->setCurrentIndex(sel);
+        cr.hint->setText(vers.isEmpty()
+                             ? tr("Put version folders into %1").arg(Config::instance().componentsDir(cr.type))
+                             : QString());
     }
 
     m_loading = true;
-    const int si = m_syncBox->findData(p.settings.sync);
-    m_syncBox->setCurrentIndex(si < 0 ? m_syncBox->findData(QStringLiteral("fsync")) : si);
     setLocaleValue(p.settings.locale);
     m_gamemode->setChecked(p.settings.gamemode);
     m_env = p.settings.env;
     updateEnvButton();
     m_loading = false;
     updateWarnings();
+}
+
+void MainWindow::componentChosen(const QString& type)
+{
+    const QString name = currentName();
+    const auto p = m_mgr.find(name);
+    if (!p)
+        return;
+    for (const CompRow& cr : std::as_const(m_rows)) {
+        if (cr.type != type)
+            continue;
+        const QString chosen = cr.versions->currentData().toString();
+        const auto it = p->components.constFind(type);
+        const QString applied = it == p->components.constEnd() ? QString() : it->version;
+        if (chosen == applied)
+            return;
+
+        QString err;
+        const bool ok = chosen.isEmpty() ? m_mgr.removeComponent(name, type, &err)
+                                         : m_mgr.applyComponent(name, type, chosen, &err);
+        if (!ok) {
+            QMessageBox::warning(this, QStringLiteral("Cask"), err);
+            onSelected();  // вернуть список к реальному состоянию
+        }
+        return;
+    }
 }
 
 void MainWindow::saveSettings()
@@ -393,7 +476,6 @@ void MainWindow::saveSettings()
         return;
 
     PrefixSettings s;
-    s.sync = m_syncBox->currentData().toString();
     s.locale = localeValue();
     s.gamemode = m_gamemode->isChecked();
     s.env = m_env;
@@ -505,31 +587,5 @@ void MainWindow::applyRunner()
         return;
     QString err;
     if (!m_mgr.setRunner(name, runner, &err))
-        QMessageBox::warning(this, QStringLiteral("Cask"), err);
-}
-
-void MainWindow::applyComponent(const QString& type)
-{
-    const QString name = currentName();
-    for (const CompRow& cr : std::as_const(m_rows)) {
-        if (cr.type != type)
-            continue;
-        const QString ver = cr.versions->currentText();
-        if (name.isEmpty() || ver.isEmpty())
-            return;
-        QString err;
-        if (!m_mgr.applyComponent(name, type, ver, &err))
-            QMessageBox::warning(this, QStringLiteral("Cask"), err);
-        return;
-    }
-}
-
-void MainWindow::removeComponent(const QString& type)
-{
-    const QString name = currentName();
-    if (name.isEmpty())
-        return;
-    QString err;
-    if (!m_mgr.removeComponent(name, type, &err))
         QMessageBox::warning(this, QStringLiteral("Cask"), err);
 }
