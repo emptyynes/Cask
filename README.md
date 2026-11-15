@@ -11,11 +11,18 @@ Cask/
 ├── lib/            зависимости (Qt и др.), RPATH = $ORIGIN/lib
 ├── data/
 │   ├── runners/<имя>/bin/wine      сборки Wine
-│   ├── dxvk/<версия>/{x64,x32}/*.dll
 │   ├── d7vk/<версия>/{x64,x32}/*.dll
+│   ├── dxvk/<версия>/{x64,x32}/*.dll
 │   └── vkd3d-proton/<версия>/{x64,x86}/*.dll
 └── prefixes/<имя>/                 WINEPREFIX + cask.json
+    └── cache/                      кеш шейдеров префикса
+        ├── dxvk_shader/            DXVK_STATE_CACHE_PATH (DXVK и D7VK)
+        ├── mesa_shader/            MESA_SHADER_CACHE_DIR
+        └── vkd3d_shader/           VKD3D_SHADER_CACHE_PATH
 ```
+
+Переменные кеша выставляются автоматически при каждом запуске wine в префиксе
+(создание, запуск программ, winecfg и т. д.), так что кеш переносится вместе с префиксом.
 
 - Корень можно переопределить переменной `CASK_ROOT`.
 - Папки `data` и `prefixes` меняются в «Настройках»; пути внутри корня хранятся относительными.

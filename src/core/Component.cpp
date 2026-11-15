@@ -11,9 +11,10 @@ namespace Components {
 const QList<Type>& types()
 {
     static const QList<Type> t = {
-        {QStringLiteral("dxvk"), QStringLiteral("DXVK"),
-         {QStringLiteral("x64")}, {QStringLiteral("x32"), QStringLiteral("x86")}},
+        // Порядок = порядок строк в интерфейсе.
         {QStringLiteral("d7vk"), QStringLiteral("D7VK"),
+         {QStringLiteral("x64")}, {QStringLiteral("x32"), QStringLiteral("x86")}},
+        {QStringLiteral("dxvk"), QStringLiteral("DXVK"),
          {QStringLiteral("x64")}, {QStringLiteral("x32"), QStringLiteral("x86")}},
         {QStringLiteral("vkd3d-proton"), QStringLiteral("VKD3D-Proton"),
          {QStringLiteral("x64")}, {QStringLiteral("x86"), QStringLiteral("x32")}},
