@@ -16,7 +16,8 @@ Cask/
 │   └── vkd3d-proton/<версия>/{x64,x86}/*.dll
 └── prefixes/<имя>/                 WINEPREFIX + cask.json
     └── cache/                      кеш шейдеров префикса
-        ├── dxvk_shader/            DXVK_STATE_CACHE_PATH (DXVK и D7VK)
+        ├── dxvk_shader/            DXVK_SHADER_CACHE_PATH (DXVK 3.0+),
+        │                           DXVK_STATE_CACHE_PATH (DXVK < 2.7, D7VK)
         ├── mesa_shader/            MESA_SHADER_CACHE_DIR
         └── vkd3d_shader/           VKD3D_SHADER_CACHE_PATH
 ```

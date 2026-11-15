@@ -79,7 +79,8 @@ QProcessEnvironment PrefixManager::makeEnv(const Prefix& p, const Runner& r)
 
     // Кеш шейдеров живёт внутри папки префикса (как в Bottles):
     //   <префикс>/cache/{dxvk_shader,mesa_shader,vkd3d_shader}
-    // DXVK_STATE_CACHE_PATH читают и DXVK, и D7VK (форк DXVK).
+    // DXVK_STATE_CACHE_PATH: state cache DXVK до 2.7 (убран в 2.7), D7VK как форк
+    // может его использовать. DXVK_SHADER_CACHE_PATH: кеш шейдеров DXVK 3.0+.
     const QString cache = p.path + "/cache";
     const QString dxvk = cache + "/dxvk_shader";
     const QString mesa = cache + "/mesa_shader";
@@ -88,6 +89,7 @@ QProcessEnvironment PrefixManager::makeEnv(const Prefix& p, const Runner& r)
     QDir().mkpath(mesa);
     QDir().mkpath(vkd3d);
     e.insert("DXVK_STATE_CACHE_PATH", dxvk);
+    e.insert("DXVK_SHADER_CACHE_PATH", dxvk);
     e.insert("MESA_SHADER_CACHE_DIR", mesa);
     e.insert("VKD3D_SHADER_CACHE_PATH", vkd3d);
     return e;
