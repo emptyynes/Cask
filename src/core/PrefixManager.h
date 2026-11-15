@@ -29,7 +29,16 @@ public:
     bool removeComponent(const QString& name, const QString& type, QString* err);
 
     // Запуск wine в префиксе (отсоединённо): программа, winecfg, regedit...
-    bool launch(const QString& name, const QStringList& wineArgs, const QString& workDir, QString* err);
+    // game = true: пользовательская программа, к ней применяется GameMode (если включён у префикса).
+    bool launch(const QString& name, const QStringList& wineArgs, const QString& workDir, QString* err,
+                bool game = false);
+
+    // Сохраняет настройки запуска префикса (переменные, синхронизация, язык, GameMode).
+    bool setSettings(const QString& name, const PrefixSettings& settings, QString* err);
+
+    // Окружение для wine. forLaunch = false: внутренние задачи (wineboot, regedit),
+    // только база, кеш и язык. true: запуск пользователем, плюс синхронизация и свои переменные.
+    static QProcessEnvironment makeEnv(const Prefix& p, const Runner& r, bool forLaunch);
 
     bool isBusy() const { return m_jobs > 0; }
 
@@ -39,7 +48,6 @@ signals:
     void message(const QString& text, bool ok);
 
 private:
-    static QProcessEnvironment makeEnv(const Prefix& p, const Runner& r);
     void startJob(const Prefix& p, const Runner& r, const QStringList& args, const QProcessEnvironment& env,
                   const QString& okMsg, std::function<void(bool)> after = {}, const QString& workDir = {});
     void importOverrides(const Prefix& p, const Runner& r, const QStringList& setNative,

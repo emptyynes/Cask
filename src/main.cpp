@@ -4,6 +4,7 @@
 #include <QDir>
 
 #include "core/Config.h"
+#include "core/I18n.h"
 
 int main(int argc, char* argv[])
 {
@@ -11,7 +12,9 @@ int main(int argc, char* argv[])
     app.setApplicationName("Cask");
     app.setApplicationVersion("0.1.0");
 
-    Config::instance().ensureLayout();
+    Config& cfg = Config::instance();
+    cfg.ensureLayout();
+    I18n::apply(cfg.language());  // по умолчанию "system": язык берётся из системы
 
     MainWindow w;
     w.show();

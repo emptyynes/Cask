@@ -22,6 +22,7 @@ public:
 
     QString rootDir() const { return m_root; }
     QString libDir() const;
+    QString langDir() const;  // необязательные внешние переводы: lang/<код>.json
     QString dataDir() const;
     QString prefixesDir() const;
     QString runnersDir() const;
@@ -29,6 +30,10 @@ public:
 
     void setDataDir(const QString& absPath);
     void setPrefixesDir(const QString& absPath);
+
+    // "system" (по умолчанию, язык системы) или код языка ("en", "ru").
+    QString language() const;
+    void setLanguage(const QString& code);
 
     void ensureLayout() const;
 

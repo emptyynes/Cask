@@ -67,7 +67,7 @@ std::optional<Prefix> PrefixManager::find(const QString& name) const
     return Prefix::load(Config::instance().prefixesDir() + "/" + name);
 }
 
-QProcessEnvironment PrefixManager::makeEnv(const Prefix& p, const Runner& r)
+QProcessEnvironment PrefixManager::makeEnv(const Prefix& p, const Runner& r, bool forLaunch)
 {
     QProcessEnvironment e = QProcessEnvironment::systemEnvironment();
     e.insert("WINEPREFIX", p.path);
@@ -92,6 +92,21 @@ QProcessEnvironment PrefixManager::makeEnv(const Prefix& p, const Runner& r)
     e.insert("DXVK_SHADER_CACHE_PATH", dxvk);
     e.insert("MESA_SHADER_CACHE_DIR", mesa);
     e.insert("VKD3D_SHADER_CACHE_PATH", vkd3d);
+
+    // Язык, который видит Wine.
+    LaunchSettings::applyLocale(e, p.settings.locale);
+
+    if (!forLaunch)
+        return e;
+
+    LaunchSettings::applySync(e, p.settings.sync);
+
+    // Свои переменные префикса применяются последними и могут переопределить всё выше,
+    // кроме WINEPREFIX и WINEARCH.
+    for (auto it = p.settings.env.cbegin(); it != p.settings.env.cend(); ++it) {
+        if (LaunchSettings::isValidEnvName(it.key()) && !LaunchSettings::isReservedEnvName(it.key()))
+            e.insert(it.key(), it.value());
+    }
     return e;
 }
 
@@ -122,13 +137,13 @@ void PrefixManager::startJob(const Prefix&, const Runner& r, const QStringList& 
                 QString msg = okMsg;
                 if (!ok) {
                     const QString out = QString::fromLocal8Bit(proc->readAll()).trimmed().right(500);
-                    msg = tr("Ошибка wine (код %1). %2").arg(code).arg(out);
+                    msg = tr("Wine error (code %1). %2").arg(code).arg(out);
                 }
                 finish(ok, msg);
             });
     connect(proc, &QProcess::errorOccurred, this, [proc, finish, this](QProcess::ProcessError e) {
         if (e == QProcess::FailedToStart)
-            finish(false, tr("Не удалось запустить %1").arg(proc->program()));
+            finish(false, tr("Failed to start %1").arg(proc->program()));
     });
 
     if (++m_jobs == 1)
@@ -140,26 +155,26 @@ bool PrefixManager::create(const QString& name, const QString& runner, const QSt
 {
     static const QRegularExpression re(QStringLiteral("^[\\p{L}\\p{N}][\\p{L}\\p{N} _.\\-]{0,63}$"));
     if (!re.match(name).hasMatch()) {
-        setErr(err, tr("Недопустимое имя. Буквы, цифры, пробел, _ . - (до 64 символов)."));
+        setErr(err, tr("Invalid name. Letters, digits, space, _ . - are allowed (up to 64 characters)."));
         return false;
     }
     if (arch != "win64" && arch != "win32") {
-        setErr(err, tr("Неизвестная архитектура: %1").arg(arch));
+        setErr(err, tr("Unknown architecture: %1").arg(arch));
         return false;
     }
     const auto r = RunnerManager::find(runner);
     if (!r) {
-        setErr(err, tr("Wine «%1» не найден.").arg(runner));
+        setErr(err, tr("Wine '%1' was not found.").arg(runner));
         return false;
     }
 
     const QString path = Config::instance().prefixesDir() + "/" + name;
     if (QFileInfo::exists(path)) {
-        setErr(err, tr("Префикс с таким именем уже существует."));
+        setErr(err, tr("A prefix with this name already exists."));
         return false;
     }
     if (!QDir().mkpath(path)) {
-        setErr(err, tr("Не удалось создать папку %1").arg(path));
+        setErr(err, tr("Could not create folder %1").arg(path));
         return false;
     }
 
@@ -170,14 +185,14 @@ bool PrefixManager::create(const QString& name, const QString& runner, const QSt
     p.arch = arch;
     p.created = QDateTime::currentDateTime();
     if (!p.save()) {
-        setErr(err, tr("Не удалось записать cask.json"));
+        setErr(err, tr("Could not write cask.json"));
         return false;
     }
     emit changed();
 
-    QProcessEnvironment env = makeEnv(p, *r);
+    QProcessEnvironment env = makeEnv(p, *r, false);
     env.insert("WINEDLLOVERRIDES", "mscoree,mshtml=d");  // без диалогов Mono/Gecko
-    startJob(p, *r, {"wineboot", "--init"}, env, tr("Префикс «%1» создан").arg(name),
+    startJob(p, *r, {"wineboot", "--init"}, env, tr("Prefix '%1' created").arg(name),
              [this](bool) { emit changed(); });
     return true;
 }
@@ -186,35 +201,35 @@ bool PrefixManager::remove(const QString& name, QString* err)
 {
     const auto p = find(name);
     if (!p) {
-        setErr(err, tr("Префикс не найден."));
+        setErr(err, tr("Prefix not found."));
         return false;
     }
     if (isBusy()) {
-        setErr(err, tr("Дождитесь завершения текущей операции."));
+        setErr(err, tr("Wait for the current operation to finish."));
         return false;
     }
     const QString root = QFileInfo(Config::instance().prefixesDir()).canonicalFilePath();
     const QString canon = QFileInfo(p->path).canonicalFilePath();
     if (root.isEmpty() || !canon.startsWith(root + "/")) {
-        setErr(err, tr("Путь префикса вне папки префиксов, удаление отменено."));
+        setErr(err, tr("The prefix path is outside the prefixes folder; deletion cancelled."));
         return false;
     }
 
     // Останавливаем wineserver префикса, чтобы не осталось процессов.
     if (const auto r = RunnerManager::find(p->runner)) {
         QProcess k;
-        k.setProcessEnvironment(makeEnv(*p, *r));
+        k.setProcessEnvironment(makeEnv(*p, *r, false));
         k.start(r->system ? QStringLiteral("wineserver") : r->binDir + "/wineserver", {"-k"});
         k.waitForFinished(5000);
     }
 
     if (!removeTree(p->path)) {
-        setErr(err, tr("Не всё удалось удалить из %1").arg(p->path));
+        setErr(err, tr("Not everything could be removed from %1").arg(p->path));
         emit changed();
         return false;
     }
     emit changed();
-    emit message(tr("Префикс «%1» удалён").arg(name), true);
+    emit message(tr("Prefix '%1' removed").arg(name), true);
     return true;
 }
 
@@ -222,22 +237,22 @@ bool PrefixManager::setRunner(const QString& name, const QString& runner, QStrin
 {
     auto p = find(name);
     if (!p) {
-        setErr(err, tr("Префикс не найден."));
+        setErr(err, tr("Prefix not found."));
         return false;
     }
     const auto r = RunnerManager::find(runner);
     if (!r) {
-        setErr(err, tr("Wine «%1» не найден.").arg(runner));
+        setErr(err, tr("Wine '%1' was not found.").arg(runner));
         return false;
     }
     p->runner = runner;
     if (!p->save()) {
-        setErr(err, tr("Не удалось записать cask.json"));
+        setErr(err, tr("Could not write cask.json"));
         return false;
     }
     emit changed();
-    startJob(*p, *r, {"wineboot", "-u"}, makeEnv(*p, *r),
-             tr("Wine префикса «%1» изменён на %2").arg(name, runner), [this](bool) { emit changed(); });
+    startJob(*p, *r, {"wineboot", "-u"}, makeEnv(*p, *r, false),
+             tr("Wine of prefix '%1' changed to %2").arg(name, runner), [this](bool) { emit changed(); });
     return true;
 }
 
@@ -292,13 +307,13 @@ void PrefixManager::importOverrides(const Prefix& p, const Runner& r, const QStr
     const QString regPath = p.path + "/" + regName;
     QFile f(regPath);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        emit message(tr("Не удалось записать %1").arg(regPath), false);
+        emit message(tr("Could not write %1").arg(regPath), false);
         return;
     }
     f.write(data);
     f.close();
 
-    startJob(p, r, {"regedit", "/S", regName}, makeEnv(p, r), okMsg,
+    startJob(p, r, {"regedit", "/S", regName}, makeEnv(p, r, false), okMsg,
              [regPath](bool) { QFile::remove(regPath); }, p.path);
 }
 
@@ -306,28 +321,28 @@ bool PrefixManager::applyComponent(const QString& name, const QString& type, con
 {
     auto po = find(name);
     if (!po) {
-        setErr(err, tr("Префикс не найден."));
+        setErr(err, tr("Prefix not found."));
         return false;
     }
     Prefix p = *po;
     const auto r = RunnerManager::find(p.runner);
     if (!r) {
-        setErr(err, tr("Wine «%1» этого префикса не найден.").arg(p.runner));
+        setErr(err, tr("The Wine of this prefix ('%1') was not found.").arg(p.runner));
         return false;
     }
     const Components::Type* t = Components::find(type);
     if (!t) {
-        setErr(err, tr("Неизвестный компонент: %1").arg(type));
+        setErr(err, tr("Unknown component: %1").arg(type));
         return false;
     }
     const QString srcRoot = Config::instance().componentsDir(type) + "/" + version;
     if (!QDir(srcRoot).exists()) {
-        setErr(err, tr("Папка не найдена: %1").arg(srcRoot));
+        setErr(err, tr("Folder not found: %1").arg(srcRoot));
         return false;
     }
     const QString win = p.windowsDir();
     if (!QDir(win + "/system32").exists()) {
-        setErr(err, tr("Префикс ещё не инициализирован (нет drive_c/windows/system32)."));
+        setErr(err, tr("The prefix is not initialized yet (no drive_c/windows/system32)."));
         return false;
     }
 
@@ -352,7 +367,7 @@ bool PrefixManager::applyComponent(const QString& name, const QString& type, con
         }
     }
     if (plan.isEmpty()) {
-        setErr(err, tr("В %1 не найдено DLL (ожидаются подпапки x64 и x32/x86).").arg(srcRoot));
+        setErr(err, tr("No DLLs found in %1 (subfolders x64 and x32/x86 are expected).").arg(srcRoot));
         return false;
     }
 
@@ -370,7 +385,7 @@ bool PrefixManager::applyComponent(const QString& name, const QString& type, con
             p.components.insert(type, a);
             restoreFiles(p, type);
             p.save();
-            setErr(err, tr("Не удалось скопировать %1").arg(it.src));
+            setErr(err, tr("Could not copy %1").arg(it.src));
             emit changed();
             return false;
         }
@@ -382,7 +397,7 @@ bool PrefixManager::applyComponent(const QString& name, const QString& type, con
     }
     p.components.insert(type, a);
     if (!p.save()) {
-        setErr(err, tr("Не удалось записать cask.json"));
+        setErr(err, tr("Could not write cask.json"));
         return false;
     }
     emit changed();
@@ -393,7 +408,7 @@ bool PrefixManager::applyComponent(const QString& name, const QString& type, con
         if (!setNative.contains(n))
             toRemove << n;
     importOverrides(p, *r, setNative, toRemove,
-                    tr("%1 %2 применён к «%3»").arg(t->title, version, name));
+                    tr("%1 %2 applied to '%3'").arg(t->title, version, name));
     return true;
 }
 
@@ -401,51 +416,100 @@ bool PrefixManager::removeComponent(const QString& name, const QString& type, QS
 {
     auto po = find(name);
     if (!po) {
-        setErr(err, tr("Префикс не найден."));
+        setErr(err, tr("Prefix not found."));
         return false;
     }
     Prefix p = *po;
     if (!p.components.contains(type)) {
-        setErr(err, tr("Компонент не применён."));
+        setErr(err, tr("Component is not applied."));
         return false;
     }
     const auto r = RunnerManager::find(p.runner);
     if (!r) {
-        setErr(err, tr("Wine «%1» этого префикса не найден.").arg(p.runner));
+        setErr(err, tr("The Wine of this prefix ('%1') was not found.").arg(p.runner));
         return false;
     }
     const QStringList drop = restoreFiles(p, type);
     if (!p.save()) {
-        setErr(err, tr("Не удалось записать cask.json"));
+        setErr(err, tr("Could not write cask.json"));
         return false;
     }
     emit changed();
     const Components::Type* t = Components::find(type);
-    importOverrides(p, *r, {}, drop, tr("%1 удалён из «%2»").arg(t ? t->title : type, name));
+    importOverrides(p, *r, {}, drop, tr("%1 removed from '%2'").arg(t ? t->title : type, name));
     return true;
 }
 
-bool PrefixManager::launch(const QString& name, const QStringList& wineArgs, const QString& workDir, QString* err)
+bool PrefixManager::launch(const QString& name, const QStringList& wineArgs, const QString& workDir, QString* err,
+                           bool game)
 {
     const auto p = find(name);
     if (!p) {
-        setErr(err, tr("Префикс не найден."));
+        setErr(err, tr("Prefix not found."));
         return false;
     }
     const auto r = RunnerManager::find(p->runner);
     if (!r) {
-        setErr(err, tr("Wine «%1» этого префикса не найден.").arg(p->runner));
+        setErr(err, tr("The Wine of this prefix ('%1') was not found.").arg(p->runner));
         return false;
     }
+
+    QString program = r->wine;
+    QStringList args = wineArgs;
+    if (game && p->settings.gamemode) {
+        const QString gm = LaunchSettings::gamemodeBinary();
+        if (!gm.isEmpty()) {
+            args.prepend(r->wine);
+            program = gm;
+        } else {
+            emit message(tr("GameMode is enabled for this prefix, but gamemoderun was not found. "
+                            "Launching without it."),
+                         true);
+        }
+    }
+
     QProcess proc;
-    proc.setProgram(r->wine);
-    proc.setArguments(wineArgs);
-    proc.setProcessEnvironment(makeEnv(*p, *r));
+    proc.setProgram(program);
+    proc.setArguments(args);
+    proc.setProcessEnvironment(makeEnv(*p, *r, true));
     if (!workDir.isEmpty())
         proc.setWorkingDirectory(workDir);
     if (!proc.startDetached()) {
-        setErr(err, tr("Не удалось запустить %1").arg(r->wine));
+        setErr(err, tr("Failed to start %1").arg(program));
         return false;
     }
+    return true;
+}
+
+bool PrefixManager::setSettings(const QString& name, const PrefixSettings& in, QString* err)
+{
+    auto p = find(name);
+    if (!p) {
+        setErr(err, tr("Prefix not found."));
+        return false;
+    }
+
+    PrefixSettings s = in;
+    s.sync = LaunchSettings::normalizeSync(s.sync);
+    s.locale = s.locale.trimmed();
+    for (auto it = s.env.cbegin(); it != s.env.cend(); ++it) {
+        if (!LaunchSettings::isValidEnvName(it.key())) {
+            setErr(err, tr("Invalid variable name: %1").arg(it.key()));
+            return false;
+        }
+        if (LaunchSettings::isReservedEnvName(it.key())) {
+            setErr(err, tr("The variable %1 is set by Cask and cannot be changed.").arg(it.key()));
+            return false;
+        }
+    }
+
+    if (s == p->settings)
+        return true;
+    p->settings = s;
+    if (!p->save()) {
+        setErr(err, tr("Could not write cask.json"));
+        return false;
+    }
+    emit message(tr("Settings of prefix '%1' saved").arg(name), true);
     return true;
 }

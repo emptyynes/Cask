@@ -27,6 +27,16 @@ bool Prefix::save() const
     }
     o["components"] = comps;
 
+    QJsonObject s;
+    s["sync"] = settings.sync;
+    s["locale"] = settings.locale;
+    s["gamemode"] = settings.gamemode;
+    QJsonObject env;
+    for (auto it = settings.env.cbegin(); it != settings.env.cend(); ++it)
+        env[it.key()] = it.value();
+    s["env"] = env;
+    o["settings"] = s;
+
     QFile f(path + "/" + kMetaFile);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
         return false;
@@ -60,5 +70,14 @@ std::optional<Prefix> Prefix::load(const QString& dir)
             a.files << v.toString();
         p.components.insert(it.key(), a);
     }
+
+    // Префиксы из версии 0.1 не имеют "settings": берутся значения по умолчанию.
+    const QJsonObject s = o.value("settings").toObject();
+    p.settings.sync = LaunchSettings::normalizeSync(s.value("sync").toString(QStringLiteral("fsync")));
+    p.settings.locale = s.value("locale").toString();
+    p.settings.gamemode = s.value("gamemode").toBool(false);
+    const QJsonObject env = s.value("env").toObject();
+    for (auto it = env.begin(); it != env.end(); ++it)
+        p.settings.env.insert(it.key(), it.value().toString());
     return p;
 }

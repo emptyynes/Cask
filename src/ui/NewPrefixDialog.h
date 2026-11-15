@@ -16,34 +16,36 @@ class NewPrefixDialog : public QDialog {
 public:
     explicit NewPrefixDialog(QWidget* parent = nullptr) : QDialog(parent)
     {
-        setWindowTitle(tr("Новый префикс"));
+        setWindowTitle(tr("New prefix"));
         setMinimumWidth(420);
         auto* form = new QFormLayout(this);
 
         m_name = new QLineEdit;
-        m_name->setPlaceholderText(tr("Например: Games"));
+        m_name->setPlaceholderText(tr("e.g. Games"));
         m_runner = new QComboBox;
         const auto runners = RunnerManager::available();
         for (const Runner& r : runners)
-            m_runner->addItem(r.system ? tr("Системный Wine") : r.name, r.name);
+            m_runner->addItem(r.system ? tr("System Wine") : r.name, r.name);
         m_arch = new QComboBox;
         m_arch->addItem(QStringLiteral("64-bit (win64)"), QStringLiteral("win64"));
         m_arch->addItem(QStringLiteral("32-bit (win32)"), QStringLiteral("win32"));
 
-        form->addRow(tr("Имя"), m_name);
+        form->addRow(tr("Name"), m_name);
         form->addRow(tr("Wine"), m_runner);
-        form->addRow(tr("Архитектура"), m_arch);
+        form->addRow(tr("Architecture"), m_arch);
 
         if (runners.isEmpty()) {
             auto* hint = new QLabel(
-                tr("Wine не найден. Положите сборку Wine в папку\n%1\n(внутри должен быть bin/wine) "
-                   "или установите системный wine.")
+                tr("Wine was not found. Put a Wine build into the folder\n%1\n(it must contain bin/wine) "
+                   "or install system wine.")
                     .arg(Config::instance().runnersDir()));
             hint->setWordWrap(true);
             form->addRow(hint);
         }
 
         auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        buttons->button(QDialogButtonBox::Ok)->setText(tr("OK"));
+        buttons->button(QDialogButtonBox::Cancel)->setText(tr("Cancel"));
         buttons->button(QDialogButtonBox::Ok)->setEnabled(!runners.isEmpty());
         connect(buttons, &QDialogButtonBox::accepted, this, [this] {
             if (!m_name->text().trimmed().isEmpty())

@@ -39,6 +39,19 @@ QString Config::store(const QString& absPath) const
 }
 
 QString Config::libDir() const { return m_root + "/lib"; }
+QString Config::langDir() const { return m_root + "/lang"; }
+
+QString Config::language() const
+{
+    const QString v = m_settings->value("ui/language", "system").toString();
+    return v.isEmpty() ? QStringLiteral("system") : v;
+}
+
+void Config::setLanguage(const QString& code)
+{
+    m_settings->setValue("ui/language", code);
+    m_settings->sync();
+}
 QString Config::dataDir() const { return resolve("paths/data", "data"); }
 QString Config::prefixesDir() const { return resolve("paths/prefixes", "prefixes"); }
 QString Config::runnersDir() const { return dataDir() + "/runners"; }
@@ -59,6 +72,7 @@ void Config::setPrefixesDir(const QString& absPath)
 void Config::ensureLayout() const
 {
     QDir().mkpath(libDir());
+    QDir().mkpath(langDir());
     QDir().mkpath(prefixesDir());
     QDir().mkpath(runnersDir());
     for (const auto& t : Components::types())

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "LaunchSettings.h"
+
 #include <QDateTime>
 #include <QMap>
 #include <QString>
@@ -22,6 +24,7 @@ struct Prefix {
     QString arch = QStringLiteral("win64");
     QDateTime created;
     QMap<QString, AppliedComponent> components;
+    PrefixSettings settings;
 
     QString windowsDir() const { return path + "/drive_c/windows"; }
 

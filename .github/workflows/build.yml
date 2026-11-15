@@ -21,11 +21,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build qt6-base-dev libgl1-mesa-dev patchelf
 
+      - name: Check translations
+        run: python3 scripts/check-translations.py
+
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build
+
+      - name: Unit tests
+        run: QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
 
       - name: Bundle portable layout
         run: bash scripts/bundle-linux.sh build/Cask
@@ -33,10 +39,12 @@ jobs:
       - name: Smoke test (offscreen)
         run: |
           set +e
-          QT_QPA_PLATFORM=offscreen timeout 3 build/Cask/cask
-          code=$?
           # 124 = процесс жив до таймаута, то есть окно успешно запустилось
-          test "$code" -eq 124
+          QT_QPA_PLATFORM=offscreen timeout 3 build/Cask/cask
+          test "$?" -eq 124
+          # то же с русской системной локалью (интерфейс собирается из перевода)
+          LANG=ru_RU.UTF-8 LC_ALL=ru_RU.UTF-8 QT_QPA_PLATFORM=offscreen timeout 3 build/Cask/cask
+          test "$?" -eq 124
 
       - name: Archive
         run: tar -C build -czf Cask-linux-x86_64.tar.gz Cask
