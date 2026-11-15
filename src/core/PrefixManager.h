@@ -27,6 +27,15 @@ public:
     // Возвращает число замен, -1 если профиль ещё не создан.
     static int unlinkUserDirs(const QString& prefixPath);
 
+    // Останавливает все процессы префикса: wineserver -k, затем SIGKILL тем, кто остался.
+    bool stopAll(const QString& name, QString* err);
+    // pid процессов, у которых WINEPREFIX указывает на этот префикс.
+    static QList<qint64> processes(const QString& prefixPath);
+    // SIGKILL всем таким процессам; возвращает число успешно сигналенных.
+    static int killProcesses(const QString& prefixPath);
+    // wineserver выбранной сборки Wine.
+    static QString wineserverPath(const Runner& r);
+
     // Создаёт папку префикса и в фоне запускает wineboot --init.
     bool create(const QString& name, const QString& runner, const QString& arch, QString* err);
     bool remove(const QString& name, QString* err);
@@ -59,7 +68,7 @@ signals:
     void message(const QString& text, bool ok);
 
 private:
-    void isolateUserDirs(const QString& name);  // unlinkUserDirs + пометка в cask.json
+    int stopProcesses(const Prefix& p);  // возвращает, сколько процессов работало до остановки
     void startJob(const Prefix& p, const Runner& r, const QStringList& args, const QProcessEnvironment& env,
                   const QString& okMsg, std::function<void(bool)> after = {}, const QString& workDir = {});
     void importOverrides(const Prefix& p, const Runner& r, const QStringList& setNative,

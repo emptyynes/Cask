@@ -75,6 +75,7 @@ void Config::ensureLayout() const
     QDir().mkpath(langDir());
     QDir().mkpath(prefixesDir());
     QDir().mkpath(runnersDir());
+    QDir().mkpath(dataDir() + "/winetricks");
     for (const auto& t : Components::types())
         QDir().mkpath(componentsDir(t.id));
 }

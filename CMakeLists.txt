@@ -19,6 +19,7 @@ set(CASK_CORE_SOURCES
     src/core/Runner.h          src/core/Runner.cpp
     src/core/Prefix.h          src/core/Prefix.cpp
     src/core/PrefixManager.h   src/core/PrefixManager.cpp
+    src/core/Winetricks.h      src/core/Winetricks.cpp
     resources/cask.qrc
 )
 
@@ -29,6 +30,7 @@ add_executable(cask
     src/ui/NewPrefixDialog.h
     src/ui/SettingsDialog.h
     src/ui/EnvDialog.h
+    src/ui/WinetricksDialog.h
 )
 
 target_include_directories(cask PRIVATE src)
@@ -49,6 +51,7 @@ set(CASK_LAYOUT_DIRS
     data/dxvk
     data/d7vk
     data/vkd3d-proton
+    data/winetricks
     prefixes
 )
 

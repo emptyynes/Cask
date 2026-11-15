@@ -3,11 +3,14 @@
 #include "core/LaunchSettings.h"
 #include "core/Prefix.h"
 #include "core/PrefixManager.h"
+#include "core/Winetricks.h"
 
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QProcess>
+#include <QSet>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -52,28 +55,24 @@ private slots:
         p.settings.locale = "ru_RU.UTF-8";
         p.settings.gamemode = true;
         p.settings.env = {{"DXVK_HUD", "fps"}, {"MANGOHUD", "1"}};
-        p.userDirsIsolated = true;
         QVERIFY(p.save());
 
         const auto loaded = Prefix::load(p.path);
         QVERIFY(loaded.has_value());
         QCOMPARE(loaded->settings, p.settings);
-        QVERIFY(loaded->userDirsIsolated);
     }
 
-    void oldPrefixLoadsWithDefaults()
+    void handEditedPrefixDropsProtectedAndInvalidVariables()
     {
-        // Префикс версии 0.1 + устаревший ключ sync + переменная, которой теперь управляет Cask.
-        Prefix p = makePrefix("legacy");
+        Prefix p = makePrefix("handedited");
         writeFile(p.path + "/cask.json",
                   R"({"runner":"system","arch":"win64","created":"2026-01-01T00:00:00","components":{},
-                      "settings":{"sync":"esync","env":{"LANG":"C","KEEP":"1","bad name":"x"}}})");
+                      "settings":{"env":{"LANG":"C","KEEP":"1","bad name":"x"}}})");
 
         const auto loaded = Prefix::load(p.path);
         QVERIFY(loaded.has_value());
         QVERIFY(loaded->settings.locale.isEmpty());
         QVERIFY(!loaded->settings.gamemode);
-        QVERIFY(!loaded->userDirsIsolated);
         QCOMPARE(loaded->settings.env, (QMap<QString, QString>{{"KEEP", "1"}}));
     }
 
@@ -238,6 +237,100 @@ private slots:
     {
         Prefix p = makePrefix("noprofile");
         QCOMPARE(PrefixManager::unlinkUserDirs(p.path), -1);
+    }
+
+    // ---- остановка процессов префикса ----
+
+    void processesAreFoundAndKilledPerPrefix()
+    {
+        const QString pathA = makePrefix("kill_a").path;
+        const QString pathB = makePrefix("kill_b").path;
+
+        auto startSleep = [](QProcess& proc, const QString& prefix) {
+            QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+            env.insert("WINEPREFIX", prefix);
+            proc.setProcessEnvironment(env);
+            proc.start("sleep", {"60"});
+            return proc.waitForStarted(3000);
+        };
+        QProcess a, b;
+        QVERIFY(startSleep(a, pathA));
+        QVERIFY(startSleep(b, pathB));
+
+        QTRY_VERIFY(PrefixManager::processes(pathA).contains(a.processId()));
+        QVERIFY(!PrefixManager::processes(pathA).contains(b.processId()));  // чужой префикс не виден
+
+        QVERIFY(PrefixManager::killProcesses(pathA) >= 1);
+        QVERIFY(a.waitForFinished(3000));
+        QCOMPARE(b.state(), QProcess::Running);                              // и не затронут
+        QVERIFY(PrefixManager::processes(pathA).isEmpty());
+
+        b.kill();
+        b.waitForFinished(3000);
+    }
+
+    // ---- winetricks ----
+
+    void winetricksListIsParsed()
+    {
+        const QByteArray out =
+            "Using winetricks 20240105 - sha256sum: abc with wine-11.22 and WINEARCH=win64\n"
+            "===== apps =====\n"
+            "7zip                         7-Zip 9.20 (7-zip.org, 2010) [downloadable]\n"
+            "\n"
+            "===== dlls =====\n"
+            "corefonts                    MS Arial, Courier, Times fonts [downloadable]\n"
+            "dxvk                         Vulkan-based D3D implementation (2024) [downloadable]\n"
+            "vcrun2019                    Visual C++ 2015-2019 libraries (Microsoft, 2019)\n";
+        const auto verbs = Winetricks::parseList(out);
+        QCOMPARE(verbs.size(), 4);  // строка-баннер до первого заголовка не попала в список
+        QCOMPARE(verbs[0].category, QString("apps"));
+        QCOMPARE(verbs[0].name, QString("7zip"));
+        QCOMPARE(verbs[0].description, QString("7-Zip 9.20 (7-zip.org, 2010) [downloadable]"));
+        QCOMPARE(verbs[1].category, QString("dlls"));
+        QCOMPARE(verbs[3].name, QString("vcrun2019"));
+
+        // вывод без заголовков тоже разбирается
+        const auto flat = Winetricks::parseList("corefonts  MS fonts\nvcrun2019  VC++\n");
+        QCOMPARE(flat.size(), 2);
+        QVERIFY(flat[0].category.isEmpty());
+    }
+
+    void winetricksInstalledOnlyKnownVerbs()
+    {
+        const QSet<QString> known{"corefonts", "vcrun2019", "dxvk"};
+        const auto installed = Winetricks::parseInstalled(
+            "corefonts\nvcrun2019\nwarning: something odd\n\n", known);
+        QCOMPARE(installed, (QSet<QString>{"corefonts", "vcrun2019"}));
+    }
+
+    void winetricksHidesWhatCaskManages()
+    {
+        QVERIFY(Winetricks::isManagedByCask("dxvk"));
+        QVERIFY(Winetricks::isManagedByCask("dxvk_nvapi"));
+        QVERIFY(Winetricks::isManagedByCask("vkd3d"));
+        QVERIFY(Winetricks::isManagedByCask("d9vk"));
+        QVERIFY(!Winetricks::isManagedByCask("corefonts"));
+        QVERIFY(!Winetricks::isManagedByCask("d3dx9"));
+        QVERIFY(!Winetricks::isManagedByCask("d3dcompiler_47"));
+        QVERIFY(Winetricks::isValidVerb("vcrun2019"));
+        QVERIFY(!Winetricks::isValidVerb("a b"));
+        QVERIFY(!Winetricks::isValidVerb("-q"));
+        QVERIFY(!Winetricks::isValidVerb("; rm"));
+    }
+
+    void winetricksEnvironment()
+    {
+        Prefix p = makePrefix("wt");
+        const Runner r{QStringLiteral("custom"), QStringLiteral("/opt/w/bin"), QStringLiteral("/opt/w/bin/wine"),
+                       false};
+        const QProcessEnvironment e = Winetricks::makeEnv(p, r);
+        QCOMPARE(e.value("WINEPREFIX"), p.path);
+        QCOMPARE(e.value("WINE"), QString("/opt/w/bin/wine"));
+        QCOMPARE(e.value("WINESERVER"), QString("/opt/w/bin/wineserver"));
+        QCOMPARE(e.value("W_CACHE"), Winetricks::cacheDir());
+        QVERIFY(Winetricks::cacheDir().startsWith(Config::instance().dataDir()));
+        QVERIFY(e.value("PATH").startsWith("/opt/w/bin:"));
     }
 
     // ---- порядок префиксов ----

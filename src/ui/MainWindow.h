@@ -30,6 +30,8 @@ private slots:
     void runExe();
     void openFolder();
     void applyRunner();
+    void stopAll();
+    void openWinetricks();
     void saveSettings();
     void editEnv();
 

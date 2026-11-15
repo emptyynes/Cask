@@ -7,9 +7,11 @@
 #include "ui/EnvDialog.h"
 #include "ui/NewPrefixDialog.h"
 #include "ui/SettingsDialog.h"
+#include "ui/WinetricksDialog.h"
 
 #include <QAbstractItemModel>
 #include <QAction>
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDesktopServices>
@@ -120,16 +122,15 @@ void MainWindow::buildUi()
     m_path->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_path->setWordWrap(true);
     m_arch = new QLabel;
+    // Wine меняется так же, как компоненты: выбор в списке сразу применяется.
     m_runnerBox = new QComboBox;
-    auto* runnerBtn = new QPushButton(tr("Change Wine"));
-    connect(runnerBtn, &QPushButton::clicked, this, &MainWindow::applyRunner);
-    auto* runnerRow = new QHBoxLayout;
-    runnerRow->addWidget(m_runnerBox, 1);
-    runnerRow->addWidget(runnerBtn);
+    connect(m_runnerBox, QOverload<int>::of(&QComboBox::activated), this, [this](int) {
+        QTimer::singleShot(0, this, [this] { applyRunner(); });
+    });
     form->addRow(tr("Name"), m_name);
     form->addRow(tr("Folder"), m_path);
     form->addRow(tr("Architecture"), m_arch);
-    form->addRow(tr("Wine"), runnerRow);
+    form->addRow(tr("Wine"), m_runnerBox);
     v->addWidget(info);
 
     // Компоненты: «Никакой» по умолчанию; выбор версии применяет её, «Никакой» снимает.
@@ -209,13 +210,19 @@ void MainWindow::buildUi()
     addTool(tr("Registry editor (regedit)"), {"regedit"});
     addTool(tr("Add/remove programs"), {"uninstaller"});
     addTool(tr("Task manager"), {"taskmgr"});
+    QAction* winetricks = menu->addAction(tr("Winetricks…"));
+    connect(winetricks, &QAction::triggered, this, &MainWindow::openWinetricks);
     toolsBtn->setMenu(menu);
+    auto* stopBtn = new QPushButton(tr("Stop all processes"));
+    stopBtn->setToolTip(tr("Stops every Wine process of this prefix (wineserver -k, then kill)."));
+    connect(stopBtn, &QPushButton::clicked, this, &MainWindow::stopAll);
     auto* folderBtn = new QPushButton(tr("Open folder"));
     connect(folderBtn, &QPushButton::clicked, this, &MainWindow::openFolder);
     auto* delBtn = new QPushButton(tr("Delete prefix"));
     connect(delBtn, &QPushButton::clicked, this, &MainWindow::deletePrefix);
     actions->addWidget(runBtn);
     actions->addWidget(toolsBtn);
+    actions->addWidget(stopBtn);
     actions->addWidget(folderBtn);
     actions->addStretch(1);
     actions->addWidget(delBtn);
@@ -525,6 +532,30 @@ void MainWindow::applyRunner()
     if (p && p->runner == runner)
         return;
     QString err;
-    if (!m_mgr.setRunner(name, runner, &err))
+    if (!m_mgr.setRunner(name, runner, &err)) {
         QMessageBox::warning(this, QStringLiteral("Cask"), err);
+        onSelected();  // вернуть список к реальному Wine префикса
+    }
+}
+
+void MainWindow::stopAll()
+{
+    const QString name = currentName();
+    if (name.isEmpty())
+        return;
+    QApplication::setOverrideCursor(Qt::WaitCursor);  // остановка может занять несколько секунд
+    QString err;
+    const bool ok = m_mgr.stopAll(name, &err);
+    QApplication::restoreOverrideCursor();
+    if (!ok)
+        QMessageBox::warning(this, QStringLiteral("Cask"), err);
+}
+
+void MainWindow::openWinetricks()
+{
+    const auto p = m_mgr.find(currentName());
+    if (!p)
+        return;
+    WinetricksDialog dlg(&m_mgr, *p, this);
+    dlg.exec();
 }

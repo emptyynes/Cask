@@ -3,7 +3,9 @@
 #include "Component.h"
 #include "Config.h"
 
+#include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -11,8 +13,12 @@
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSet>
+#include <QStandardPaths>
+#include <QThread>
 #include <algorithm>
 #include <climits>
+#include <csignal>
+#include <sys/types.h>
 
 namespace {
 
@@ -126,15 +132,88 @@ int PrefixManager::unlinkUserDirs(const QString& prefixPath)
     return replaced;
 }
 
-void PrefixManager::isolateUserDirs(const QString& name)
+QString PrefixManager::wineserverPath(const Runner& r)
 {
-    auto p = find(name);
-    if (!p || unlinkUserDirs(p->path) < 0)
-        return;  // профиль ещё не создан: попробуем позже
-    if (!p->userDirsIsolated) {
-        p->userDirsIsolated = true;
-        p->save();
+    if (!r.system)
+        return r.binDir + "/wineserver";
+    const QString found = QStandardPaths::findExecutable(QStringLiteral("wineserver"));
+    return found.isEmpty() ? QStringLiteral("wineserver") : found;
+}
+
+QList<qint64> PrefixManager::processes(const QString& prefixPath)
+{
+    // Любой процесс, в окружении которого WINEPREFIX указывает на этот префикс:
+    // программы, запущенные из Cask, wineserver, winetricks и то, что запущено из терминала.
+    QList<QByteArray> wanted{"WINEPREFIX=" + QDir::cleanPath(prefixPath).toLocal8Bit()};
+    const QString canon = QFileInfo(prefixPath).canonicalFilePath();
+    if (!canon.isEmpty() && canon != QDir::cleanPath(prefixPath))
+        wanted << "WINEPREFIX=" + canon.toLocal8Bit();
+
+    QList<qint64> out;
+    const qint64 self = QCoreApplication::applicationPid();
+    const QStringList entries = QDir(QStringLiteral("/proc")).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString& e : entries) {
+        bool ok = false;
+        const qint64 pid = e.toLongLong(&ok);
+        if (!ok || pid == self)
+            continue;
+        QFile f(QStringLiteral("/proc/%1/environ").arg(pid));
+        if (!f.open(QIODevice::ReadOnly))
+            continue;  // чужой процесс или уже завершился
+        const QList<QByteArray> vars = f.readAll().split('\0');
+        for (const QByteArray& v : vars) {
+            if (wanted.contains(v)) {
+                out << pid;
+                break;
+            }
+        }
     }
+    return out;
+}
+
+int PrefixManager::killProcesses(const QString& prefixPath)
+{
+    int n = 0;
+    for (qint64 pid : processes(prefixPath))
+        if (::kill(static_cast<pid_t>(pid), SIGKILL) == 0)
+            ++n;
+    return n;
+}
+
+int PrefixManager::stopProcesses(const Prefix& p)
+{
+    const int before = processes(p.path).size();
+    if (before == 0)
+        return 0;
+
+    // Сначала по-хорошему: wineserver -k завершает все процессы префикса.
+    if (const auto r = RunnerManager::find(p.runner)) {
+        QProcess k;
+        k.setProcessEnvironment(makeEnv(p, *r, false));
+        k.start(wineserverPath(*r), {"-k"});
+        k.waitForFinished(5000);
+    }
+    // wineserver -k только рассылает сигнал: даём до 3 секунд, затем добиваем оставшихся.
+    QElapsedTimer t;
+    t.start();
+    while (!processes(p.path).isEmpty() && t.elapsed() < 3000)
+        QThread::msleep(100);
+    killProcesses(p.path);
+    return before;
+}
+
+bool PrefixManager::stopAll(const QString& name, QString* err)
+{
+    const auto p = find(name);
+    if (!p) {
+        setErr(err, tr("Prefix not found."));
+        return false;
+    }
+    const int n = stopProcesses(*p);
+    emit message(n == 0 ? tr("No running processes in prefix '%1'").arg(name)
+                        : tr("All processes of prefix '%1' stopped").arg(name),
+                 true);
+    return true;
 }
 
 std::optional<Prefix> PrefixManager::find(const QString& name) const
@@ -269,9 +348,9 @@ bool PrefixManager::create(const QString& name, const QString& runner, const QSt
     QProcessEnvironment env = makeEnv(p, *r, false);
     env.insert("WINEDLLOVERRIDES", "mscoree,mshtml=d");  // без диалогов Mono/Gecko
     startJob(p, *r, {"wineboot", "--init"}, env, tr("Prefix '%1' created").arg(name),
-             [this, name](bool ok) {
+             [this, path](bool ok) {
                  if (ok)
-                     isolateUserDirs(name);  // Desktop, Documents... не ссылаются на домашнюю папку
+                     unlinkUserDirs(path);  // Desktop, Documents... не ссылаются на домашнюю папку
                  emit changed();
              });
     return true;
@@ -295,13 +374,8 @@ bool PrefixManager::remove(const QString& name, QString* err)
         return false;
     }
 
-    // Останавливаем wineserver префикса, чтобы не осталось процессов.
-    if (const auto r = RunnerManager::find(p->runner)) {
-        QProcess k;
-        k.setProcessEnvironment(makeEnv(*p, *r, false));
-        k.start(r->system ? QStringLiteral("wineserver") : r->binDir + "/wineserver", {"-k"});
-        k.waitForFinished(5000);
-    }
+    // Останавливаем все процессы префикса, чтобы ничего не осталось в удаляемой папке.
+    stopProcesses(*p);
 
     if (!removeTree(p->path)) {
         setErr(err, tr("Not everything could be removed from %1").arg(p->path));
@@ -335,9 +409,9 @@ bool PrefixManager::setRunner(const QString& name, const QString& runner, QStrin
     }
     emit changed();
     startJob(*p, *r, {"wineboot", "-u"}, makeEnv(*p, *r, false),
-             tr("Wine of prefix '%1' changed to %2").arg(name, runner), [this, name](bool ok) {
+             tr("Wine of prefix '%1' changed to %2").arg(name, runner), [this, path = p->path](bool ok) {
                  if (ok)
-                     isolateUserDirs(name);  // wineboot -u мог создать ссылки заново
+                     unlinkUserDirs(path);  // wineboot -u мог создать ссылки заново
                  emit changed();
              });
     return true;
@@ -540,10 +614,6 @@ bool PrefixManager::launch(const QString& name, const QStringList& wineArgs, con
         setErr(err, tr("The Wine of this prefix ('%1') was not found.").arg(p->runner));
         return false;
     }
-
-    // Префиксы, созданные раньше: один раз заменяем ссылки на домашние папки обычными.
-    if (!p->userDirsIsolated)
-        isolateUserDirs(name);
 
     QString program = r->wine;
     QStringList args = wineArgs;
