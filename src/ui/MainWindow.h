@@ -69,6 +69,7 @@ private:
     // Настройки запуска
     QComboBox* m_localeBox = nullptr;
     QCheckBox* m_gamemode = nullptr;
+    QCheckBox* m_mangohud = nullptr;
     QPushButton* m_envBtn = nullptr;
     QMap<QString, QString> m_env;
     bool m_loading = false;  // true, пока элементы заполняются из префикса (не сохранять)

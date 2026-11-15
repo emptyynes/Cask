@@ -60,6 +60,7 @@ Cask/
 |---|---|
 | Язык Wine | Пусто = язык системы, иначе значение для `LANG` и `LC_ALL` (например `ru_RU.UTF-8`; можно ввести своё). |
 | GameMode | Программы, запущенные через «Запустить программу…», стартуют через `gamemoderun` |
+| MangoHud | То же через `mangohud` (нужен установленный пакет). Настройка оверлея: переменная `MANGOHUD_CONFIG` в своих переменных, например `fps,cpu_temp`. Вместе с GameMode цепочка такая: `gamemoderun mangohud wine ...` |
 | Переменные окружения | Любые свои переменные (например `DXVK_HUD=fps`). **Не заменяют переменные, которыми управляет Cask**: `WINEPREFIX`, `WINEARCH`, `PATH`, `LANG`, `LC_ALL`, `DXVK_STATE_CACHE_PATH`, `DXVK_SHADER_CACHE_PATH`, `MESA_SHADER_CACHE_DIR`, `VKD3D_SHADER_CACHE_PATH`. Такие имена редактор не принимает. Остальные, включая `WINEDEBUG`, применяются |
 
 Синхронизацию (ntsync и др.) Cask не настраивает: Wine 11 сам использует ntsync, если он доступен.

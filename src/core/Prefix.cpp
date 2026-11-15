@@ -30,6 +30,7 @@ bool Prefix::save() const
     QJsonObject s;
     s["locale"] = settings.locale;
     s["gamemode"] = settings.gamemode;
+    s["mangohud"] = settings.mangohud;
     QJsonObject env;
     for (auto it = settings.env.cbegin(); it != settings.env.cend(); ++it)
         env[it.key()] = it.value();
@@ -73,6 +74,7 @@ std::optional<Prefix> Prefix::load(const QString& dir)
     const QJsonObject s = o.value("settings").toObject();
     p.settings.locale = s.value("locale").toString();
     p.settings.gamemode = s.value("gamemode").toBool(false);
+    p.settings.mangohud = s.value("mangohud").toBool(false);
     const QJsonObject env = s.value("env").toObject();
     for (auto it = env.begin(); it != env.end(); ++it) {
         // Если cask.json правили руками: переменные, которыми управляет Cask, отбрасываются.

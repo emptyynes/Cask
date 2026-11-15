@@ -56,4 +56,9 @@ QString gamemodeBinary()
     return QStandardPaths::findExecutable(QStringLiteral("gamemoderun"));
 }
 
+QString mangohudBinary()
+{
+    return QStandardPaths::findExecutable(QStringLiteral("mangohud"));
+}
+
 }  // namespace LaunchSettings

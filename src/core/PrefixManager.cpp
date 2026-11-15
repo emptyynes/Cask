@@ -615,19 +615,29 @@ bool PrefixManager::launch(const QString& name, const QStringList& wineArgs, con
         return false;
     }
 
-    QString program = r->wine;
-    QStringList args = wineArgs;
+    // Обёртки: gamemoderun mangohud wine ...
+    QStringList chain;
     if (game && p->settings.gamemode) {
         const QString gm = LaunchSettings::gamemodeBinary();
-        if (!gm.isEmpty()) {
-            args.prepend(r->wine);
-            program = gm;
-        } else {
+        if (!gm.isEmpty())
+            chain << gm;
+        else
             emit message(tr("GameMode is enabled for this prefix, but gamemoderun was not found. "
                             "Launching without it."),
                          true);
-        }
     }
+    if (game && p->settings.mangohud) {
+        const QString mh = LaunchSettings::mangohudBinary();
+        if (!mh.isEmpty())
+            chain << mh;
+        else
+            emit message(tr("MangoHud is enabled for this prefix, but mangohud was not found. "
+                            "Launching without it."),
+                         true);
+    }
+    chain << r->wine;
+    const QString program = chain.takeFirst();
+    const QStringList args = chain + wineArgs;
 
     QProcess proc;
     proc.setProgram(program);

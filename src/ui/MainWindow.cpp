@@ -184,6 +184,13 @@ void MainWindow::buildUi()
                                : tr("Programs started with 'Run program…' are launched through gamemoderun."));
     lf->addRow(tr("Performance"), m_gamemode);
 
+    m_mangohud = new QCheckBox(tr("Use MangoHud"));
+    m_mangohud->setToolTip(LaunchSettings::mangohudBinary().isEmpty()
+                               ? tr("mangohud was not found. Install the 'mangohud' package.")
+                               : tr("Programs started with 'Run program…' are launched through mangohud. "
+                                    "Configure it with MANGOHUD_CONFIG in the environment variables."));
+    lf->addRow(tr("Overlay"), m_mangohud);
+
     m_envBtn = new QPushButton;
     lf->addRow(tr("Environment"), m_envBtn);
     updateEnvButton();
@@ -191,6 +198,7 @@ void MainWindow::buildUi()
     connect(m_localeBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { saveSettings(); });
     connect(m_localeBox->lineEdit(), &QLineEdit::editingFinished, this, [this] { saveSettings(); });
     connect(m_gamemode, &QCheckBox::toggled, this, [this] { saveSettings(); });
+    connect(m_mangohud, &QCheckBox::toggled, this, [this] { saveSettings(); });
     connect(m_envBtn, &QPushButton::clicked, this, &MainWindow::editEnv);
     v->addWidget(launch);
 
@@ -339,6 +347,7 @@ void MainWindow::onSelected()
         updateEnvButton();
         setLocaleValue(QString());
         m_gamemode->setChecked(false);
+        m_mangohud->setChecked(false);
         m_loading = false;
         return;
     }
@@ -383,6 +392,7 @@ void MainWindow::onSelected()
     m_loading = true;
     setLocaleValue(p.settings.locale);
     m_gamemode->setChecked(p.settings.gamemode);
+    m_mangohud->setChecked(p.settings.mangohud);
     m_env = p.settings.env;
     updateEnvButton();
     m_loading = false;
@@ -425,6 +435,7 @@ void MainWindow::saveSettings()
     PrefixSettings s;
     s.locale = localeValue();
     s.gamemode = m_gamemode->isChecked();
+    s.mangohud = m_mangohud->isChecked();
     s.env = m_env;
 
     QString err;

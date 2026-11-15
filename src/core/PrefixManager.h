@@ -48,7 +48,7 @@ public:
     bool removeComponent(const QString& name, const QString& type, QString* err);
 
     // Запуск wine в префиксе (отсоединённо): программа, winecfg, regedit...
-    // game = true: пользовательская программа, к ней применяется GameMode (если включён у префикса).
+    // game = true: пользовательская программа, к ней применяются GameMode и MangoHud (если включены у префикса).
     bool launch(const QString& name, const QStringList& wineArgs, const QString& workDir, QString* err,
                 bool game = false);
 

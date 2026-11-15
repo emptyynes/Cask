@@ -10,11 +10,12 @@
 struct PrefixSettings {
     QString locale;                          // пусто = язык системы, иначе например ru_RU.UTF-8
     bool gamemode = false;                   // запускать программы через gamemoderun
+    bool mangohud = false;                   // запускать программы через mangohud
     QMap<QString, QString> env;              // свои переменные окружения
 
     bool operator==(const PrefixSettings& o) const
     {
-        return locale == o.locale && gamemode == o.gamemode && env == o.env;
+        return locale == o.locale && gamemode == o.gamemode && mangohud == o.mangohud && env == o.env;
     }
     bool operator!=(const PrefixSettings& o) const { return !(*this == o); }
 };
@@ -33,5 +34,6 @@ bool isReservedEnvName(const QString& name);
 void applyLocale(QProcessEnvironment& env, const QString& locale);
 
 QString gamemodeBinary();    // путь к gamemoderun или пусто
+QString mangohudBinary();    // путь к mangohud или пусто
 
 }  // namespace LaunchSettings

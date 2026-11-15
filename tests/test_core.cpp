@@ -54,6 +54,7 @@ private slots:
         Prefix p = makePrefix("roundtrip");
         p.settings.locale = "ru_RU.UTF-8";
         p.settings.gamemode = true;
+        p.settings.mangohud = true;
         p.settings.env = {{"DXVK_HUD", "fps"}, {"MANGOHUD", "1"}};
         QVERIFY(p.save());
 
@@ -73,6 +74,7 @@ private slots:
         QVERIFY(loaded.has_value());
         QVERIFY(loaded->settings.locale.isEmpty());
         QVERIFY(!loaded->settings.gamemode);
+        QVERIFY(!loaded->settings.mangohud);
         QCOMPARE(loaded->settings.env, (QMap<QString, QString>{{"KEEP", "1"}}));
     }
 
@@ -183,6 +185,7 @@ private slots:
 
         PrefixSettings s;
         s.gamemode = true;
+        s.mangohud = true;
         s.env = {{"FOO", "bar"}};
         QString err;
         QVERIFY2(mgr.setSettings("manager", s, &err), qPrintable(err));
