@@ -26,8 +26,6 @@
 #include <QLocale>
 #include <QMenu>
 #include <QMessageBox>
-#include <QPainter>
-#include <QPixmap>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
@@ -37,38 +35,6 @@
 #include <QToolBar>
 #include <QUrl>
 #include <QVBoxLayout>
-
-namespace {
-
-// Круглая «аватарка» с первой буквой имени; цвет зависит от имени (одинаков при каждом запуске).
-QIcon avatarIcon(const QString& name, int size, qreal dpr)
-{
-    uint h = 7;
-    for (const QChar c : name)
-        h = h * 31 + c.unicode();
-
-    QPixmap pm(QSize(size, size) * dpr);
-    pm.setDevicePixelRatio(dpr);
-    pm.fill(Qt::transparent);
-
-    QPainter p(&pm);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setRenderHint(QPainter::TextAntialiasing);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor::fromHsl(static_cast<int>(h % 360), 120, 115));
-    p.drawEllipse(QRectF(0, 0, size, size));
-
-    QFont f = p.font();
-    f.setBold(true);
-    f.setPixelSize(static_cast<int>(size * 0.46));
-    p.setFont(f);
-    p.setPen(Qt::white);
-    p.drawText(QRectF(0, 0, size, size), Qt::AlignCenter, name.left(1).toUpper());
-    p.end();
-    return QIcon(pm);
-}
-
-}  // namespace
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
@@ -123,13 +89,13 @@ void MainWindow::buildUi()
     lv->setSpacing(10);
 
     auto* listTitle = new QLabel(tr("Prefixes"));
-    listTitle->setStyleSheet(QStringLiteral("font-weight: 600; padding-left: 4px;"));
+    QFont titleFont = listTitle->font();
+    titleFont.setBold(true);
+    listTitle->setFont(titleFont);
     lv->addWidget(listTitle);
 
+    // Обычный список без своих стилей: вид целиком определяет системная тема.
     m_list = new QListWidget;
-    m_list->setFrameShape(QFrame::NoFrame);
-    m_list->setIconSize(QSize(30, 30));
-    m_list->setSpacing(2);
     m_list->setSelectionMode(QAbstractItemView::SingleSelection);
     m_list->setDragEnabled(true);
     m_list->setAcceptDrops(true);
@@ -137,11 +103,6 @@ void MainWindow::buildUi()
     m_list->setDragDropMode(QAbstractItemView::InternalMove);
     m_list->setDefaultDropAction(Qt::MoveAction);
     m_list->setToolTip(tr("Drag prefixes to change their order"));
-    m_list->setStyleSheet(QStringLiteral(
-        "QListWidget { background: transparent; outline: 0; }"
-        "QListWidget::item { padding: 8px 10px; border-radius: 8px; }"
-        "QListWidget::item:hover:!selected { background: rgba(127, 127, 127, 40); }"
-        "QListWidget::item:selected { background: palette(highlight); color: palette(highlighted-text); }"));
     connect(m_list, &QListWidget::currentRowChanged, this, [this](int) { onSelected(); });
     connect(m_list->model(), &QAbstractItemModel::rowsMoved, this, [this] { saveOrder(); });
     lv->addWidget(m_list, 1);
@@ -213,15 +174,8 @@ void MainWindow::buildUi()
     m_localeBox->lineEdit()->setPlaceholderText(tr("e.g. de_DE.UTF-8"));
     m_localeBox->setToolTip(
         tr("Language that Wine and the programs in this prefix see (sets LANG and LC_ALL). "
-           "The locale must be generated on your system. You can type your own value."));
-    m_localeWarn = new QLabel;
-    m_localeWarn->setWordWrap(true);
-    m_localeWarn->hide();
-    auto* localeCol = new QVBoxLayout;
-    localeCol->setContentsMargins(0, 0, 0, 0);
-    localeCol->addWidget(m_localeBox);
-    localeCol->addWidget(m_localeWarn);
-    lf->addRow(tr("Wine language"), localeCol);
+           "You can type your own value."));
+    lf->addRow(tr("Wine language"), m_localeBox);
 
     m_gamemode = new QCheckBox(tr("Use GameMode"));
     m_gamemode->setToolTip(LaunchSettings::gamemodeBinary().isEmpty()
@@ -251,7 +205,6 @@ void MainWindow::buildUi()
     };
     addTool(tr("Explorer"), {"explorer"});
     addTool(tr("Control panel"), {"control"});
-    menu->addSeparator();
     addTool(tr("Wine configuration (winecfg)"), {"winecfg"});
     addTool(tr("Registry editor (regedit)"), {"regedit"});
     addTool(tr("Add/remove programs"), {"uninstaller"});
@@ -324,11 +277,10 @@ void MainWindow::refresh()
     {
         const QSignalBlocker blocker(m_list);
         m_list->clear();
-        const qreal dpr = devicePixelRatioF();
         for (const Prefix& p : m_mgr.list()) {
-            auto* it = new QListWidgetItem(avatarIcon(p.name, m_list->iconSize().width(), dpr), p.name);
+            auto* it = new QListWidgetItem(p.name);
             it->setData(Qt::UserRole, p.name);
-            it->setSizeHint(QSize(0, 46));
+            it->setSizeHint(QSize(0, 30));  // чуть выше стандартной строки: проще попасть мышью
             m_list->addItem(it);
         }
         if (!keep.isEmpty())
@@ -356,16 +308,6 @@ void MainWindow::setLocaleValue(const QString& value)
         m_localeBox->setEditText(value);
 }
 
-void MainWindow::updateWarnings()
-{
-    const QString loc = localeValue();
-    const bool locBad = !loc.isEmpty() && !LaunchSettings::localeInstalled(loc);
-    m_localeWarn->setText(
-        tr("Warning: this locale is not generated on your system (see 'locale -a'). "
-           "Wine may fall back to English."));
-    m_localeWarn->setVisible(locBad);
-}
-
 void MainWindow::updateEnvButton()
 {
     m_envBtn->setText(m_env.isEmpty() ? tr("Edit variables…") : tr("Edit variables (%1)…").arg(m_env.size()));
@@ -391,7 +333,6 @@ void MainWindow::onSelected()
         setLocaleValue(QString());
         m_gamemode->setChecked(false);
         m_loading = false;
-        updateWarnings();
         return;
     }
     const Prefix& p = *po;
@@ -438,7 +379,6 @@ void MainWindow::onSelected()
     m_env = p.settings.env;
     updateEnvButton();
     m_loading = false;
-    updateWarnings();
 }
 
 void MainWindow::componentChosen(const QString& type)
@@ -483,7 +423,6 @@ void MainWindow::saveSettings()
     QString err;
     if (!m_mgr.setSettings(name, s, &err))
         QMessageBox::warning(this, QStringLiteral("Cask"), err);
-    updateWarnings();
 }
 
 void MainWindow::editEnv()

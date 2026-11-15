@@ -48,7 +48,6 @@ private:
     void componentChosen(const QString& type);
     void saveOrder();
     void selectByName(const QString& name);
-    void updateWarnings();
     void updateEnvButton();
     QString localeValue() const;
     void setLocaleValue(const QString& value);
@@ -67,7 +66,6 @@ private:
 
     // Настройки запуска
     QComboBox* m_localeBox = nullptr;
-    QLabel* m_localeWarn = nullptr;
     QCheckBox* m_gamemode = nullptr;
     QPushButton* m_envBtn = nullptr;
     QMap<QString, QString> m_env;

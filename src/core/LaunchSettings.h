@@ -33,6 +33,5 @@ bool isReservedEnvName(const QString& name);
 void applyLocale(QProcessEnvironment& env, const QString& locale);
 
 QString gamemodeBinary();    // путь к gamemoderun или пусто
-bool localeInstalled(const QString& locale);  // есть ли такая локаль в `locale -a`
 
 }  // namespace LaunchSettings

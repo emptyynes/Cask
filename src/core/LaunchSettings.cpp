@@ -1,21 +1,9 @@
 #include "LaunchSettings.h"
 
-#include <QProcess>
 #include <QRegularExpression>
 #include <QStandardPaths>
 
 namespace LaunchSettings {
-
-namespace {
-
-QString normLocale(QString s)
-{
-    s = s.trimmed().toLower();
-    s.replace(QStringLiteral("utf-8"), QStringLiteral("utf8"));
-    return s;
-}
-
-}  // namespace
 
 QStringList localePresets()
 {
@@ -66,32 +54,6 @@ void applyLocale(QProcessEnvironment& env, const QString& locale)
 QString gamemodeBinary()
 {
     return QStandardPaths::findExecutable(QStringLiteral("gamemoderun"));
-}
-
-bool localeInstalled(const QString& locale)
-{
-    const QString want = normLocale(locale);
-    if (want.isEmpty() || want == QLatin1String("c") || want == QLatin1String("posix"))
-        return true;
-
-    static const QStringList installed = [] {
-        QStringList list;
-        QProcess p;
-        p.start(QStringLiteral("locale"), {QStringLiteral("-a")});
-        if (!p.waitForFinished(3000)) {
-            p.kill();
-            return list;
-        }
-        const QList<QByteArray> lines = p.readAllStandardOutput().split('\n');
-        for (const QByteArray& line : lines)
-            if (!line.trimmed().isEmpty())
-                list << normLocale(QString::fromLocal8Bit(line));
-        return list;
-    }();
-
-    if (installed.isEmpty())
-        return true;  // `locale` недоступен: не знаем, не пугаем пользователя
-    return installed.contains(want);
 }
 
 }  // namespace LaunchSettings

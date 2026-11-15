@@ -52,7 +52,6 @@
   "None": "Никакой",
   "System default": "Как в системе",
   "e.g. de_DE.UTF-8": "например, de_DE.UTF-8",
-  "Language that Wine and the programs in this prefix see (sets LANG and LC_ALL). The locale must be generated on your system. You can type your own value.": "Язык, который видят Wine и программы в этом префиксе (задаёт LANG и LC_ALL). Локаль должна быть сгенерирована в системе. Можно ввести своё значение.",
   "Wine language": "Язык Wine",
   "Use GameMode": "Использовать GameMode",
   "gamemoderun was not found. Install the 'gamemode' package.": "gamemoderun не найден. Установите пакет «gamemode».",
@@ -67,7 +66,6 @@
   "Task manager": "Диспетчер задач",
   "Open folder": "Открыть папку",
   "Delete prefix": "Удалить префикс",
-  "Warning: this locale is not generated on your system (see 'locale -a'). Wine may fall back to English.": "Внимание: эта локаль не сгенерирована в системе (см. «locale -a»). Wine может переключиться на английский.",
   "Edit variables…": "Изменить переменные…",
   "Edit variables (%1)…": "Изменить переменные (%1)…",
   "System Wine": "Системный Wine",
@@ -91,5 +89,6 @@
   "Prefixes": "Префиксы",
   "Drag prefixes to change their order": "Перетаскивайте префиксы, чтобы изменить порядок",
   "Explorer": "Проводник",
-  "Control panel": "Панель управления"
+  "Control panel": "Панель управления",
+  "Language that Wine and the programs in this prefix see (sets LANG and LC_ALL). You can type your own value.": "Язык, который видят Wine и программы в этом префиксе (задаёт LANG и LC_ALL). Можно ввести своё значение."
 }
