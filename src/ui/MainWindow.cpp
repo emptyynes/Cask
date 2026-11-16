@@ -35,7 +35,10 @@
 #include <QSplitter>
 #include <QStatusBar>
 #include <QTimer>
+#include <QStyle>
 #include <QToolBar>
+#include <QToolButton>
+#include <QIcon>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -88,7 +91,6 @@ void MainWindow::buildUi()
         connect(a, &QAction::triggered, this, slot);
     };
     addAct(tr("New prefix"), &MainWindow::newPrefix);
-    addAct(tr("Refresh"), &MainWindow::refresh);
     addAct(tr("Settings"), &MainWindow::openSettings);
 
     // Center: prefix list on the left, details on the right
@@ -106,7 +108,19 @@ void MainWindow::buildUi()
     QFont titleFont = listTitle->font();
     titleFont.setBold(true);
     listTitle->setFont(titleFont);
-    lv->addWidget(listTitle);
+
+    // Refresh is a small icon button aligned to the right edge of the list.
+    auto* refreshBtn = new QToolButton;
+    refreshBtn->setAutoRaise(true);
+    refreshBtn->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh"), style()->standardIcon(QStyle::SP_BrowserReload)));
+    refreshBtn->setToolTip(tr("Refresh"));
+    connect(refreshBtn, &QToolButton::clicked, this, &MainWindow::refresh);
+    auto* head = new QHBoxLayout;
+    head->setContentsMargins(0, 0, 0, 0);
+    head->addWidget(listTitle);
+    head->addStretch(1);
+    head->addWidget(refreshBtn);
+    lv->addLayout(head);
 
     // Plain list without custom styles: the look is fully determined by the system theme.
     m_list = new QListWidget;

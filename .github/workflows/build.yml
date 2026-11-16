@@ -2,24 +2,30 @@ name: Build
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
 
+# Cancel superseded runs of the same branch, but never a tag build that publishes a release.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 permissions:
-  contents: write   # needed only to publish a release on a tag
+  contents: read
 
 jobs:
   linux:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build qt6-base-dev libgl1-mesa-dev patchelf
+          sudo apt-get install -y --no-install-recommends cmake ninja-build qt6-base-dev libgl1-mesa-dev patchelf
 
       - name: Check translations
         run: python3 scripts/check-translations.py
@@ -36,15 +42,27 @@ jobs:
       - name: Bundle portable layout
         run: bash scripts/bundle-linux.sh build/Cask
 
-      - name: Smoke test (offscreen)
+      # Exit code 124 means the process was still alive when the timeout hit, i.e. the window started.
+      - name: Smoke test (offscreen, English)
         run: |
-          set +e
-          # 124 = process was alive until the timeout, i.e. the window started successfully
-          QT_QPA_PLATFORM=offscreen timeout 3 build/Cask/cask
-          test "$?" -eq 124 || { echo "English smoke test failed"; exit 1; }
-          # same with a Russian system locale (the UI is built from the translation)
-          LANG=ru_RU.UTF-8 LC_ALL=ru_RU.UTF-8 QT_QPA_PLATFORM=offscreen timeout 3 build/Cask/cask
-          test "$?" -eq 124
+          status=0
+          QT_QPA_PLATFORM=offscreen timeout 3 build/Cask/cask || status=$?
+          [ "$status" -eq 124 ] || { echo "Smoke test failed (exit code $status)"; exit 1; }
+
+      # The UI is built from the translation, so run once more with a Russian system locale.
+      - name: Smoke test (offscreen, Russian)
+        run: |
+          status=0
+          LANG=ru_RU.UTF-8 LC_ALL=ru_RU.UTF-8 QT_QPA_PLATFORM=offscreen timeout 3 build/Cask/cask || status=$?
+          [ "$status" -eq 124 ] || { echo "Smoke test failed (exit code $status)"; exit 1; }
+
+      # No qt.conf in the root: the Qt plugins must be picked up from lib/plugins next to the binary.
+      - name: Check bundled Qt plugins are used
+        run: |
+          out=$(QT_DEBUG_PLUGINS=1 QT_QPA_PLATFORM=offscreen timeout 3 build/Cask/cask 2>&1 || true)
+          echo "$out" | grep -q 'Cask/lib/plugins/platforms/libqoffscreen' \
+            || { echo "$out" | grep -i 'plugin' | head -20; echo "Bundled platform plugin was not used"; exit 1; }
+          test ! -e build/Cask/qt.conf
 
       - name: Archive
         run: tar -C build -czf Cask-linux-x86_64.tar.gz Cask
@@ -54,8 +72,18 @@ jobs:
           name: Cask-linux-x86_64
           path: Cask-linux-x86_64.tar.gz
 
-      - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: linux
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write   # needed only to publish the release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Cask-linux-x86_64
+
+      - uses: softprops/action-gh-release@v2
         with:
           files: Cask-linux-x86_64.tar.gz
+          generate_release_notes: true

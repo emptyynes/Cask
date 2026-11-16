@@ -2,6 +2,7 @@
 #include "ui/PrefixPickerDialog.h"
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
 #include <QMessageBox>
@@ -13,6 +14,12 @@
 
 int main(int argc, char* argv[])
 {
+    // Bundled Qt plugins live in lib/plugins next to the binary, so no qt.conf is needed in the root.
+    // Must happen before QApplication is created. Uses /proc/self/exe because there is no app object yet.
+    const QString exeDir = QFileInfo(QFileInfo(QStringLiteral("/proc/self/exe")).symLinkTarget()).absolutePath();
+    if (QFileInfo(exeDir + QStringLiteral("/lib/plugins")).isDir())
+        QCoreApplication::addLibraryPath(exeDir + QStringLiteral("/lib/plugins"));
+
     QApplication app(argc, argv);
     app.setApplicationName("Cask");
     app.setApplicationVersion("0.1.0");

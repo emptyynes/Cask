@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Turns build/Cask into a portable folder: puts Qt and plugins into lib/ and plugins/,
+# Turns build/Cask into a portable folder: puts Qt and its plugins into lib/ and lib/plugins/,
 # so Cask runs without Qt installed.
 # Usage: scripts/bundle-linux.sh build/Cask
 set -euo pipefail
@@ -7,7 +7,7 @@ set -euo pipefail
 DIR="$(cd "$1" && pwd)"
 BIN="$DIR/cask"
 LIB="$DIR/lib"
-PLUG="$DIR/plugins"
+PLUG="$LIB/plugins"
 mkdir -p "$LIB" "$PLUG/platforms" "$PLUG/xcbglintegrations"
 
 QT_PLUGINS="$(find /usr/lib -type d -path '*/qt6/plugins' | head -n1)"
@@ -44,15 +44,14 @@ for _ in 1 2 3; do
   done
 done
 
-# RPATH: the binary looks in ./lib, libraries next to each other, plugins in ../../lib
+# RPATH: the binary looks in ./lib, libraries next to each other, plugins (lib/plugins/<kind>/) in ../..
 patchelf --set-rpath '$ORIGIN/lib' "$BIN"
 for f in "$LIB"/*.so*; do patchelf --set-rpath '$ORIGIN' "$f"; done
 for f in "$PLUG"/platforms/*.so "$PLUG"/xcbglintegrations/*.so; do
   [ -f "$f" ] && patchelf --set-rpath '$ORIGIN/../../lib' "$f"
 done
 
-# Qt looks for plugins next to the binary
-printf '[Paths]\nPlugins = plugins\n' > "$DIR/qt.conf"
+# No qt.conf: the binary adds lib/plugins to the Qt library path itself (see src/main.cpp).
 
 if ldd "$BIN" | grep -q 'not found'; then
   echo "Unresolved libraries:" >&2
