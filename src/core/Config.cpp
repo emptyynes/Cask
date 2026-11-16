@@ -47,6 +47,16 @@ QString Config::language() const
     return v.isEmpty() ? QStringLiteral("system") : v;
 }
 
+bool Config::desktopIntegration() const
+{
+    return m_settings->value("desktop/integration", false).toBool();
+}
+
+void Config::setDesktopIntegration(bool on)
+{
+    m_settings->setValue("desktop/integration", on);
+}
+
 void Config::setLanguage(const QString& code)
 {
     m_settings->setValue("ui/language", code);

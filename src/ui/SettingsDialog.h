@@ -1,8 +1,10 @@
 #pragma once
 
 #include "core/Config.h"
+#include "core/DesktopIntegration.h"
 #include "core/I18n.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -11,7 +13,9 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QCoreApplication>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QPushButton>
 
 class SettingsDialog : public QDialog {
@@ -40,6 +44,14 @@ public:
         form->addRow(tr("Prefixes folder"), row(m_prefixes));
         form->addRow(tr("Data folder"), row(m_data));
 
+        m_desktop = new QCheckBox(tr("Integrate with the desktop"));
+        m_desktop->setChecked(Config::instance().desktopIntegration());
+        m_desktop->setToolTip(
+            tr("Creates %1 and adds Cask to the file associations of .exe, .msi, .bat and .lnk in %2. "
+               "When turned off, these entries are removed.")
+                .arg(DesktopIntegration::desktopFileName(), DesktopIntegration::applicationsDir()));
+        form->addRow(tr("Desktop"), m_desktop);
+
         auto* hint = new QLabel(
             tr("Paths inside the Cask folder are stored as relative, so the whole folder can be "
                "moved. Existing prefixes are not moved automatically when the folder changes: "
@@ -62,6 +74,11 @@ public:
                 I18n::apply(lang);
                 m_languageChanged = true;
             }
+            c.setDesktopIntegration(m_desktop->isChecked());
+            QString derr;
+            if (!DesktopIntegration::sync(m_desktop->isChecked(), DesktopIntegration::applicationsDir(),
+                                          QCoreApplication::applicationFilePath(), &derr))
+                QMessageBox::warning(this, QStringLiteral("Cask"), derr);
             accept();
         });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -90,5 +107,6 @@ private:
     QComboBox* m_lang = nullptr;
     QLineEdit* m_prefixes = nullptr;
     QLineEdit* m_data = nullptr;
+    QCheckBox* m_desktop = nullptr;
     bool m_languageChanged = false;
 };

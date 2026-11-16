@@ -35,6 +35,10 @@ public:
     QString language() const;
     void setLanguage(const QString& code);
 
+    // Интеграция с рабочим столом (.desktop + mimeinfo.cache), по умолчанию выключена.
+    bool desktopIntegration() const;
+    void setDesktopIntegration(bool on);
+
     void ensureLayout() const;
 
 private:

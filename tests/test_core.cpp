@@ -1,4 +1,5 @@
 #include "core/Config.h"
+#include "core/DesktopIntegration.h"
 #include "core/I18n.h"
 #include "core/LaunchSettings.h"
 #include "core/Prefix.h"
@@ -272,6 +273,78 @@ private slots:
 
         b.kill();
         b.waitForFinished(3000);
+    }
+
+    // ---- интеграция с рабочим столом ----
+
+    void mimeCacheAddAndRemoveKeepsForeignLines()
+    {
+        const QByteArray foreign =
+            "[MIME Cache]\n"
+            "application/x-ms-dos-executable=wine.desktop;\n"
+            "text/plain=gedit.desktop;\n";
+        const QByteArray added = DesktopIntegration::updateMimeCache(foreign, true);
+        QVERIFY(added.contains("application/x-ms-dos-executable=cask.desktop;wine.desktop;\n"));
+        QVERIFY(added.contains("application/x-msi=cask.desktop;\n"));
+        QVERIFY(added.contains("text/plain=gedit.desktop;\n"));
+        QCOMPARE(DesktopIntegration::updateMimeCache(added, true), added);  // идемпотентно
+
+        // удаление возвращает исходное содержимое: чужие строки на месте, наши исчезли
+        QCOMPARE(DesktopIntegration::updateMimeCache(added, false), foreign);
+
+        // пустой файл: заголовок + наши строки; после удаления остаётся только заголовок
+        const QByteArray fresh = DesktopIntegration::updateMimeCache(QByteArray(), true);
+        QVERIFY(fresh.startsWith("[MIME Cache]\n"));
+        QCOMPARE(DesktopIntegration::updateMimeCache(fresh, false), QByteArray("[MIME Cache]\n"));
+    }
+
+    void desktopFileInstallFixPathAndRemove()
+    {
+        QTemporaryDir apps;
+        QVERIFY(apps.isValid());
+        const QString dir = apps.path() + "/applications";
+        const QString desktop = dir + "/cask.desktop";
+        const QString cache = dir + "/mimeinfo.cache";
+        writeFile(cache, "[MIME Cache]\ntext/plain=gedit.desktop;\n");
+
+        QString err;
+        QVERIFY2(DesktopIntegration::install(dir, "/old place/Cask/cask", &err), qPrintable(err));
+        QVERIFY(DesktopIntegration::isInstalled(dir));
+        QFile f(desktop);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        QVERIFY(f.readAll().contains("Exec=\"/old place/Cask/cask\" %f\n"));
+        f.close();
+
+        // папку Cask переместили: путь в .desktop исправляется, строки кеша не дублируются
+        QVERIFY(DesktopIntegration::install(dir, "/new/Cask/cask", &err));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray content = f.readAll();
+        f.close();
+        QVERIFY(content.contains("Exec=\"/new/Cask/cask\" %f\n"));
+        QVERIFY(!content.contains("/old place"));
+        QFile c(cache);
+        QVERIFY(c.open(QIODevice::ReadOnly));
+        QCOMPARE(c.readAll().count("cask.desktop"), DesktopIntegration::mimeTypes().size());
+        c.close();
+
+        // выключили: .desktop удалён, mimeinfo.cache остался со своими чужими строками
+        QVERIFY(DesktopIntegration::remove(dir, &err));
+        QVERIFY(!QFileInfo::exists(desktop));
+        QVERIFY(c.open(QIODevice::ReadOnly));
+        QCOMPARE(c.readAll(), QByteArray("[MIME Cache]\ntext/plain=gedit.desktop;\n"));
+        c.close();
+
+        // повторное удаление и удаление без mimeinfo.cache ничего не создают
+        QVERIFY(DesktopIntegration::remove(dir));
+        QTemporaryDir empty;
+        QVERIFY(DesktopIntegration::sync(false, empty.path() + "/x", "/a/cask"));
+        QVERIFY(!QFileInfo::exists(empty.path() + "/x/mimeinfo.cache"));
+    }
+
+    void desktopExecQuoting()
+    {
+        const QByteArray c = DesktopIntegration::desktopContent("/p/with \"q\" $x/cask");
+        QVERIFY2(c.contains("Exec=\"/p/with \\\\\"q\\\\\" \\\\$x/cask\" %f\n"), c.constData());
     }
 
     // ---- портативный MangoHud ----

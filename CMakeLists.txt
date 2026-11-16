@@ -14,6 +14,7 @@ find_package(Qt${QT_VERSION_MAJOR} QUIET OPTIONAL_COMPONENTS Test)
 set(CASK_CORE_SOURCES
     src/core/Config.h          src/core/Config.cpp
     src/core/Component.h       src/core/Component.cpp
+    src/core/DesktopIntegration.h  src/core/DesktopIntegration.cpp
     src/core/I18n.h            src/core/I18n.cpp
     src/core/LaunchSettings.h  src/core/LaunchSettings.cpp
     src/core/Runner.h          src/core/Runner.cpp
