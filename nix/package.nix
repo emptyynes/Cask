@@ -6,7 +6,7 @@
 # the Qt-wrapped binary. The C++ sources are not touched.
 #
 # Standalone use (without the flake):
-#   cask = pkgs.callPackage ./package.nix { src = <path or fetchFromGitHub of the Cask sources>; };
+#   cask = pkgs.callPackage ./package.nix { caskSrc = <path or fetchFromGitHub of the Cask sources>; };
 {
   lib,
   stdenv,
@@ -28,7 +28,8 @@
   mangohud,
 
   # Sources: only what the build needs, so editing docs or Nix files does not rebuild Cask.
-  src ? lib.fileset.toSource {
+  # (Not called `src`: nixpkgs has a top-level `src` alias that callPackage would pick up.)
+  caskSrc ? lib.fileset.toSource {
     root = ../.;
     fileset = lib.fileset.unions [
       ../CMakeLists.txt
@@ -79,7 +80,7 @@ stdenv.mkDerivation (finalAttrs: {
   pname = "cask";
   version = "0.1.0";
 
-  inherit src;
+  src = caskSrc;
 
   nativeBuildInputs = [
     cmake
