@@ -10,7 +10,7 @@ find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} QUIET OPTIONAL_COMPONENTS Test)
 
-# Ядро (без GUI) и ресурсы с переводами: общие для программы и тестов.
+# Core (no GUI) and translation resources: shared by the program and the tests.
 set(CASK_CORE_SOURCES
     src/core/Config.h          src/core/Config.cpp
     src/core/Component.h       src/core/Component.cpp
@@ -38,8 +38,8 @@ add_executable(cask
 target_include_directories(cask PRIVATE src)
 target_link_libraries(cask PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 
-# Портативная раскладка: Cask/{cask, lib/, lang/, data/, prefixes/}
-# Бинарник ищет зависимости в ./lib рядом с собой.
+# Portable layout: Cask/{cask, lib/, lang/, data/, prefixes/}
+# The binary looks for dependencies in ./lib next to itself.
 set_target_properties(cask PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Cask
     BUILD_RPATH   "$ORIGIN/lib"
@@ -66,7 +66,7 @@ endforeach()
 
 install(TARGETS cask RUNTIME DESTINATION .)
 
-# Тесты ядра (собираются, только если установлен Qt Test).
+# Core tests (built only if Qt Test is installed).
 if(TARGET Qt${QT_VERSION_MAJOR}::Test)
     enable_testing()
     add_executable(cask_tests tests/test_core.cpp ${CASK_CORE_SOURCES})

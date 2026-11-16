@@ -4,11 +4,11 @@
 #include <QString>
 #include <optional>
 
-// Сборка Wine. Лежит в data/runners/<имя>/bin/wine, либо системный wine из PATH.
+// A Wine build. Lives in data/runners/<name>/bin/wine, or the system wine from PATH.
 struct Runner {
-    QString name;    // "system" или имя папки в data/runners
-    QString binDir;  // папка с wine/wineserver
-    QString wine;    // путь к исполняемому wine
+    QString name;    // "system" or the folder name in data/runners
+    QString binDir;  // folder with wine/wineserver
+    QString wine;    // path to the wine executable
     bool system = false;
 };
 

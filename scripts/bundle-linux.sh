@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Делает из build/Cask портативную папку: кладёт Qt и плагины в lib/ и plugins/,
-# чтобы Cask запускался без установленного Qt.
-# Использование: scripts/bundle-linux.sh build/Cask
+# Turns build/Cask into a portable folder: puts Qt and plugins into lib/ and plugins/,
+# so Cask runs without Qt installed.
+# Usage: scripts/bundle-linux.sh build/Cask
 set -euo pipefail
 
 DIR="$(cd "$1" && pwd)"
@@ -13,13 +13,13 @@ mkdir -p "$LIB" "$PLUG/platforms" "$PLUG/xcbglintegrations"
 QT_PLUGINS="$(find /usr/lib -type d -path '*/qt6/plugins' | head -n1)"
 [ -n "$QT_PLUGINS" ] || { echo "Qt plugins dir not found" >&2; exit 1; }
 
-# Платформенные плагины
+# Platform plugins
 for p in libqxcb.so libqoffscreen.so libqwayland-generic.so; do
   [ -f "$QT_PLUGINS/platforms/$p" ] && cp -L "$QT_PLUGINS/platforms/$p" "$PLUG/platforms/"
 done
 cp -L "$QT_PLUGINS"/xcbglintegrations/*.so "$PLUG/xcbglintegrations/" 2>/dev/null || true
 
-# Какие библиотеки забираем с собой (остальное, например glibc/libGL, берётся из системы)
+# Which libraries to bundle (the rest, e.g. glibc/libGL, comes from the system)
 want() {
   case "$(basename "$1")" in
     libQt6*|libicu*|libdouble-conversion*|libpcre2-16*|libmd4c*|libb2*) return 0 ;;
@@ -36,7 +36,7 @@ collect() {
   done
 }
 
-# Несколько проходов, чтобы подтянуть зависимости зависимостей
+# Several passes to pull in dependencies of dependencies
 for _ in 1 2 3; do
   collect "$BIN"
   for f in "$PLUG"/platforms/*.so "$PLUG"/xcbglintegrations/*.so "$LIB"/*.so*; do
@@ -44,14 +44,14 @@ for _ in 1 2 3; do
   done
 done
 
-# RPATH: бинарник ищет в ./lib, библиотеки рядом друг с другом, плагины в ../../lib
+# RPATH: the binary looks in ./lib, libraries next to each other, plugins in ../../lib
 patchelf --set-rpath '$ORIGIN/lib' "$BIN"
 for f in "$LIB"/*.so*; do patchelf --set-rpath '$ORIGIN' "$f"; done
 for f in "$PLUG"/platforms/*.so "$PLUG"/xcbglintegrations/*.so; do
   [ -f "$f" ] && patchelf --set-rpath '$ORIGIN/../../lib' "$f"
 done
 
-# Qt ищет плагины рядом с бинарником
+# Qt looks for plugins next to the binary
 printf '[Paths]\nPlugins = plugins\n' > "$DIR/qt.conf"
 
 if ldd "$BIN" | grep -q 'not found'; then

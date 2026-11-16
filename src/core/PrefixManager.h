@@ -14,53 +14,53 @@ class PrefixManager : public QObject {
 public:
     explicit PrefixManager(QObject* parent = nullptr);
 
-    // Список в порядке, заданном пользователем (setOrder); новые префиксы в конце.
+    // List in the user-defined order (setOrder); new prefixes go at the end.
     QList<Prefix> list() const;
     std::optional<Prefix> find(const QString& name) const;
 
-    // Порядок префиксов хранится рядом с ними: <папка префиксов>/.cask-order.json
+    // The prefix order is stored next to them: <prefixes dir>/.cask-order.json
     QStringList order() const;
     bool setOrder(const QStringList& names);
 
-    // Заменяет симлинки Desktop, Documents, Downloads... в профиле Wine, ведущие за пределы
-    // префикса (в домашнюю папку), обычными пустыми папками. Файлы по ссылкам не трогает.
-    // Возвращает число замен, -1 если профиль ещё не создан.
+    // Replaces the Desktop, Documents, Downloads... symlinks in the Wine profile that point outside
+    // the prefix (to the home folder) with plain empty folders. Files behind the links are left alone.
+    // Returns the number of replacements, -1 if the profile has not been created yet.
     static int unlinkUserDirs(const QString& prefixPath);
 
-    // Останавливает все процессы префикса: wineserver -k, затем SIGKILL тем, кто остался.
+    // Stops all prefix processes: wineserver -k, then SIGKILL for whatever remains.
     bool stopAll(const QString& name, QString* err);
-    // pid процессов, у которых WINEPREFIX указывает на этот префикс.
+    // PIDs of processes whose WINEPREFIX points to this prefix.
     static QList<qint64> processes(const QString& prefixPath);
-    // SIGKILL всем таким процессам; возвращает число успешно сигналенных.
+    // SIGKILL to all such processes; returns the number successfully signalled.
     static int killProcesses(const QString& prefixPath);
-    // wineserver выбранной сборки Wine.
+    // wineserver of the selected Wine build.
     static QString wineserverPath(const Runner& r);
 
-    // Создаёт папку префикса и в фоне запускает wineboot --init.
+    // Creates the prefix folder and runs wineboot --init in the background.
     bool create(const QString& name, const QString& runner, const QString& arch, QString* err);
     bool remove(const QString& name, QString* err);
 
-    // Меняет Wine у префикса и обновляет его (wineboot -u) в фоне.
+    // Changes the prefix's Wine and updates it (wineboot -u) in the background.
     bool setRunner(const QString& name, const QString& runner, QString* err);
 
-    // Копирует DLL из data/<type>/<version> в префикс и прописывает overrides.
+    // Copies DLLs from data/<type>/<version> into the prefix and sets the overrides.
     bool applyComponent(const QString& name, const QString& type, const QString& version, QString* err);
     bool removeComponent(const QString& name, const QString& type, QString* err);
 
-    // Запуск wine в префиксе (отсоединённо): программа, winecfg, regedit...
-    // game = true: пользовательская программа, к ней применяются GameMode и MangoHud (если включены у префикса).
+    // Runs wine in the prefix (detached): a program, winecfg, regedit...
+    // game = true: a user program; GameMode and MangoHud are applied to it (if enabled for the prefix).
     bool launch(const QString& name, const QStringList& wineArgs, const QString& workDir, QString* err,
                 bool game = false);
 
-    // Аргументы wine для запуска файла: .exe напрямую, остальное (.msi, .bat, .lnk) через `start /unix`.
+    // Wine arguments to launch a file: .exe directly, anything else (.msi, .bat, .lnk) via `start /unix`.
     static QStringList programArgs(const QString& file);
 
-    // Сохраняет настройки запуска префикса (переменные, синхронизация, язык, GameMode).
+    // Saves the prefix launch settings (variables, sync, language, GameMode).
     bool setSettings(const QString& name, const PrefixSettings& settings, QString* err);
 
-    // Окружение для wine. forLaunch = false: внутренние задачи (wineboot, regedit),
-    // только база, кеш и язык. true: запуск пользователем, плюс свои переменные
-    // (они не заменяют переменные, которыми управляет Cask).
+    // Environment for wine. forLaunch = false: internal tasks (wineboot, regedit),
+    // base, cache and language only. true: user launch, plus the prefix's own variables
+    // (they do not override variables managed by Cask).
     static QProcessEnvironment makeEnv(const Prefix& p, const Runner& r, bool forLaunch);
 
     bool isBusy() const { return m_jobs > 0; }
@@ -72,7 +72,7 @@ signals:
 
 private:
     bool checkIdle(QString* err) const;  // false (with an error) while a background job runs
-    int stopProcesses(const Prefix& p);  // возвращает, сколько процессов работало до остановки
+    int stopProcesses(const Prefix& p);  // returns how many processes were running before the stop
     void startJob(const Prefix& p, const Runner& r, const QStringList& args, const QProcessEnvironment& env,
                   const QString& okMsg, std::function<void(bool)> after = {}, const QString& workDir = {});
     void importOverrides(const Prefix& p, const Runner& r, const QStringList& setNative,

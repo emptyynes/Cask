@@ -10,9 +10,9 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-// Выбор префикса для запуска файла (.exe, .msi, ...), открытого двойным кликом в файловом менеджере.
-// Обычные виджеты Qt без своих стилей. Двойной клик по префиксу = «Выбрать».
-// Префиксы создаются в главном окне.
+// Prefix picker for running a file (.exe, .msi, ...) opened by double-click in the file manager.
+// Plain Qt widgets without custom styles. Double-clicking a prefix = "Select".
+// Prefixes are created in the main window.
 class PrefixPickerDialog : public QDialog {
     Q_OBJECT
 public:

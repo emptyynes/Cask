@@ -51,7 +51,7 @@ private slots:
         Config::instance().ensureLayout();
     }
 
-    // ---- настройки префикса ----
+    // ---- prefix settings ----
 
     void prefixSettingsRoundTrip()
     {
@@ -82,7 +82,7 @@ private slots:
         QCOMPARE(loaded->settings.env, (QMap<QString, QString>{{"KEEP", "1"}}));
     }
 
-    // ---- окружение ----
+    // ---- environment ----
 
     void cacheLivesInsidePrefix()
     {
@@ -128,7 +128,7 @@ private slots:
     {
         Prefix p = makePrefix("protected");
         p.settings.locale = "ru_RU.UTF-8";
-        // Все защищённые имена пробуем подменить.
+        // Try to override all the protected names.
         for (const QString& name : LaunchSettings::reservedEnvNames())
             p.settings.env.insert(name, "/hacked");
         p.settings.env.insert("DXVK_HUD", "fps");
@@ -143,7 +143,7 @@ private slots:
         QCOMPARE(e.value("MESA_SHADER_CACHE_DIR"), p.path + "/cache/mesa_shader");
         QCOMPARE(e.value("VKD3D_SHADER_CACHE_PATH"), p.path + "/cache/vkd3d_shader");
         QVERIFY(e.value("PATH") != QString("/hacked"));
-        // а обычные переменные применяются
+        // while regular variables are applied
         QCOMPARE(e.value("DXVK_HUD"), QString("fps"));
     }
 
@@ -153,7 +153,7 @@ private slots:
         p.settings.env = {{"WINEDEBUG", "+timestamp"}, {"WINEDLLOVERRIDES", "winemenubuilder.exe=d"},
                           {"BAD NAME", "x"}};
         const QProcessEnvironment e = PrefixManager::makeEnv(p, systemRunner(), true);
-        QCOMPARE(e.value("WINEDEBUG"), QString("+timestamp"));  // у Cask лишь значение по умолчанию
+        QCOMPARE(e.value("WINEDEBUG"), QString("+timestamp"));  // Cask only has a default value
         QCOMPARE(e.value("WINEDLLOVERRIDES"), QString("winemenubuilder.exe=d"));
         QVERIFY(!e.contains("BAD NAME"));
     }
@@ -198,16 +198,16 @@ private slots:
         PrefixSettings bad = s;
         bad.env = {{"WINEPREFIX", "/x"}};
         QVERIFY(!mgr.setSettings("manager", bad, &err));
-        bad.env = {{"LANG", "C"}};  // язык меняется отдельной настройкой
+        bad.env = {{"LANG", "C"}};  // language is changed by a separate setting
         QVERIFY(!mgr.setSettings("manager", bad, &err));
         bad.env = {{"NOT VALID", "x"}};
         QVERIFY(!mgr.setSettings("manager", bad, &err));
-        QCOMPARE(mgr.find("manager")->settings, s);  // неудачные попытки ничего не меняют
+        QCOMPARE(mgr.find("manager")->settings, s);  // failed attempts change nothing
 
         QVERIFY(!mgr.setSettings("missing", s, &err));
     }
 
-    // ---- папки профиля Wine ----
+    // ---- Wine profile folders ----
 
     void userDirsAreUnlinkedFromHome()
     {
@@ -220,24 +220,24 @@ private slots:
         QDir().mkpath(user + "/AppData");
         QVERIFY(QFile::link(home + "/Desktop", user + "/Desktop"));
         QVERIFY(QFile::link(home + "/Documents", user + "/Documents"));
-        QVERIFY(QFile::link(home + "/Nowhere", user + "/Downloads"));         // битая ссылка наружу
-        QVERIFY(QFile::link(user + "/Documents", user + "/My Documents"));    // ссылка внутри префикса
+        QVERIFY(QFile::link(home + "/Nowhere", user + "/Downloads"));         // dangling link pointing outside
+        QVERIFY(QFile::link(user + "/Documents", user + "/My Documents"));    // link inside the prefix
 
         QCOMPARE(PrefixManager::unlinkUserDirs(p.path), 3);
 
         for (const char* d : {"Desktop", "Documents", "Downloads"}) {
             const QFileInfo fi(user + "/" + d);
             QVERIFY2(fi.isDir() && !fi.isSymLink(), d);
-            QVERIFY2(QDir(fi.absoluteFilePath()).isEmpty(), d);  // пустая обычная папка
+            QVERIFY2(QDir(fi.absoluteFilePath()).isEmpty(), d);  // empty regular folder
         }
-        // файлы пользователя по ссылкам не тронуты
+        // user files behind links are untouched
         QVERIFY(QFile::exists(home + "/Desktop/keep.txt"));
         QVERIFY(QFile::exists(home + "/Documents/keep.txt"));
-        // ссылка внутри префикса осталась
+        // the link inside the prefix is still there
         QVERIFY(QFileInfo(user + "/My Documents").isSymLink());
         QVERIFY(QDir(user + "/AppData").exists());
 
-        QCOMPARE(PrefixManager::unlinkUserDirs(p.path), 0);  // повторный вызов ничего не меняет
+        QCOMPARE(PrefixManager::unlinkUserDirs(p.path), 0);  // a repeated call changes nothing
     }
 
     void unlinkUserDirsWithoutProfile()
@@ -246,7 +246,7 @@ private slots:
         QCOMPARE(PrefixManager::unlinkUserDirs(p.path), -1);
     }
 
-    // ---- остановка процессов префикса ----
+    // ---- stopping prefix processes ----
 
     void processesAreFoundAndKilledPerPrefix()
     {
@@ -270,11 +270,11 @@ private slots:
         QVERIFY(startSleep(b, pathB));
 
         QTRY_VERIFY(PrefixManager::processes(pathA).contains(a.processId()));
-        QVERIFY(!PrefixManager::processes(pathA).contains(b.processId()));  // чужой префикс не виден
+        QVERIFY(!PrefixManager::processes(pathA).contains(b.processId()));  // another prefix's process is not visible
 
         QVERIFY(PrefixManager::killProcesses(pathA) >= 1);
         QVERIFY(a.waitForFinished(3000));
-        QCOMPARE(b.state(), QProcess::Running);                              // и не затронут
+        QCOMPARE(b.state(), QProcess::Running);                              // and is not affected
         QVERIFY(PrefixManager::processes(pathA).isEmpty());
 
         b.kill();
@@ -306,7 +306,7 @@ private slots:
         QCOMPARE(PrefixManager::programArgs("/g/a.bat"), (QStringList{"start", "/unix", "/g/a.bat"}));
     }
 
-    // ---- интеграция с рабочим столом ----
+    // ---- desktop integration ----
 
     void mimeCacheAddAndRemoveKeepsForeignLines()
     {
@@ -318,12 +318,12 @@ private slots:
         QVERIFY(added.contains("application/x-ms-dos-executable=cask.desktop;wine.desktop;\n"));
         QVERIFY(added.contains("application/x-msi=cask.desktop;\n"));
         QVERIFY(added.contains("text/plain=gedit.desktop;\n"));
-        QCOMPARE(DesktopIntegration::updateMimeCache(added, true), added);  // идемпотентно
+        QCOMPARE(DesktopIntegration::updateMimeCache(added, true), added);  // idempotent
 
-        // удаление возвращает исходное содержимое: чужие строки на месте, наши исчезли
+        // removal restores the original content: foreign lines stay, ours are gone
         QCOMPARE(DesktopIntegration::updateMimeCache(added, false), foreign);
 
-        // пустой файл: заголовок + наши строки; после удаления остаётся только заголовок
+        // empty file: header + our lines; after removal only the header remains
         const QByteArray fresh = DesktopIntegration::updateMimeCache(QByteArray(), true);
         QVERIFY(fresh.startsWith("[MIME Cache]\n"));
         QCOMPARE(DesktopIntegration::updateMimeCache(fresh, false), QByteArray("[MIME Cache]\n"));
@@ -346,7 +346,7 @@ private slots:
         QVERIFY(f.readAll().contains("Exec=\"/old place/Cask/cask\" %f\n"));
         f.close();
 
-        // папку Cask переместили: путь в .desktop исправляется, строки кеша не дублируются
+        // the Cask folder was moved: the path in .desktop is fixed, cache lines are not duplicated
         QVERIFY(DesktopIntegration::install(dir, "/new/Cask/cask", &err));
         QVERIFY(f.open(QIODevice::ReadOnly));
         const QByteArray content = f.readAll();
@@ -358,14 +358,14 @@ private slots:
         QCOMPARE(c.readAll().count("cask.desktop"), DesktopIntegration::mimeTypes().size());
         c.close();
 
-        // выключили: .desktop удалён, mimeinfo.cache остался со своими чужими строками
+        // turned off: .desktop is removed, mimeinfo.cache remains with its foreign lines
         QVERIFY(DesktopIntegration::remove(dir, &err));
         QVERIFY(!QFileInfo::exists(desktop));
         QVERIFY(c.open(QIODevice::ReadOnly));
         QCOMPARE(c.readAll(), QByteArray("[MIME Cache]\ntext/plain=gedit.desktop;\n"));
         c.close();
 
-        // повторное удаление и удаление без mimeinfo.cache ничего не создают
+        // repeated removal and removal without mimeinfo.cache create nothing
         QVERIFY(DesktopIntegration::remove(dir));
         QTemporaryDir empty;
         QVERIFY(DesktopIntegration::sync(false, empty.path() + "/x", "/a/cask"));
@@ -378,7 +378,7 @@ private slots:
         QVERIFY2(c.contains("Exec=\"/p/with \\\\\"q\\\\\" \\\\$x/cask\" %f\n"), c.constData());
     }
 
-    // ---- портативный MangoHud ----
+    // ---- portable MangoHud ----
 
     void portableMangohud()
     {
@@ -395,12 +395,12 @@ private slots:
 
         env.insert("LD_PRELOAD", "/other.so");
         QVERIFY(LaunchSettings::applyPortableMangohud(env));
-        QVERIFY(LaunchSettings::applyPortableMangohud(env));  // повторный вызов не дублирует
+        QVERIFY(LaunchSettings::applyPortableMangohud(env));  // a repeated call does not duplicate
         QCOMPARE(env.value("MANGOHUD"), QString("1"));
         QCOMPARE(env.value("LD_PRELOAD"), QString("/other.so:") + lib + "/libMangoHud_shim.so");
 
         const QString layer = LaunchSettings::mangohudDir() + "/layer";
-        QCOMPARE(env.value("VK_ADD_IMPLICIT_LAYER_PATH"), layer);  // без дублей после повторного вызова
+        QCOMPARE(env.value("VK_ADD_IMPLICIT_LAYER_PATH"), layer);  // no duplicates after a repeated call
         QFile f(layer + "/MangoHud.x86_64.json");
         QVERIFY(f.open(QIODevice::ReadOnly));
         const auto doc = QJsonDocument::fromJson(f.readAll());
@@ -419,7 +419,7 @@ private slots:
         QVERIFY(LaunchSettings::applyMangohudConfig(env));
         QCOMPARE(env.value("MANGOHUD_CONFIGFILE"), LaunchSettings::mangohudDir() + "/MangoHud.conf");
 
-        // уже заданную пользователем переменную не трогаем
+        // a variable already set by the user is left alone
         QProcessEnvironment own;
         own.insert("MANGOHUD_CONFIGFILE", "/my.conf");
         QVERIFY(!LaunchSettings::applyMangohudConfig(own));
@@ -440,14 +440,14 @@ private slots:
             "dxvk                         Vulkan-based D3D implementation (2024) [downloadable]\n"
             "vcrun2019                    Visual C++ 2015-2019 libraries (Microsoft, 2019)\n";
         const auto verbs = Winetricks::parseList(out);
-        QCOMPARE(verbs.size(), 4);  // строка-баннер до первого заголовка не попала в список
+        QCOMPARE(verbs.size(), 4);  // the banner line before the first header did not end up in the list
         QCOMPARE(verbs[0].category, QString("apps"));
         QCOMPARE(verbs[0].name, QString("7zip"));
         QCOMPARE(verbs[0].description, QString("7-Zip 9.20 (7-zip.org, 2010) [downloadable]"));
         QCOMPARE(verbs[1].category, QString("dlls"));
         QCOMPARE(verbs[3].name, QString("vcrun2019"));
 
-        // вывод без заголовков тоже разбирается
+        // output without headers is parsed too
         const auto flat = Winetricks::parseList("corefonts  MS fonts\nvcrun2019  VC++\n");
         QCOMPARE(flat.size(), 2);
         QVERIFY(flat[0].category.isEmpty());
@@ -490,7 +490,7 @@ private slots:
         QVERIFY(e.value("PATH").startsWith("/opt/w/bin:"));
     }
 
-    // ---- порядок префиксов ----
+    // ---- prefix order ----
 
     void prefixOrderIsRememberedAndNewOnesGoLast()
     {
@@ -506,17 +506,17 @@ private slots:
             return names;
         };
 
-        QCOMPARE(positions(), (QStringList{"ord_a", "ord_b", "ord_c"}));  // по алфавиту
+        QCOMPARE(positions(), (QStringList{"ord_a", "ord_b", "ord_c"}));  // alphabetical
         QVERIFY(mgr.setOrder({"ord_c", "ord_a", "ord_b"}));
         QCOMPARE(positions(), (QStringList{"ord_c", "ord_a", "ord_b"}));
 
-        QVERIFY(makePrefix("ord_d").save());  // новый, его нет в порядке
+        QVERIFY(makePrefix("ord_d").save());  // new one, not in the order yet
         QCOMPARE(positions(), (QStringList{"ord_c", "ord_a", "ord_b", "ord_d"}));
 
         QCOMPARE(mgr.order(), (QStringList{"ord_c", "ord_a", "ord_b"}));
     }
 
-    // ---- переводы ----
+    // ---- translations ----
 
     void languagesAreAvailable()
     {
@@ -564,7 +564,7 @@ private slots:
         QVERIFY(hasDe);
         QVERIFY(I18n::apply("de"));
         QCOMPARE(QCoreApplication::translate("X", "Settings"), QString("Einstellungen"));
-        // строки, которых нет в файле, остаются английскими
+        // strings missing from the file stay in English
         QCOMPARE(QCoreApplication::translate("X", "Refresh"), QString("Refresh"));
         QVERIFY(I18n::apply("en"));
     }

@@ -1,98 +1,113 @@
 # Cask
 
-Менеджер Wine-префиксов на C++/Qt (аналог Bottles). Версия 0.1: всё скачивается вручную.
+A Wine prefix manager written in C++/Qt, in the spirit of Bottles. Wine builds and DXVK/D7VK/VKD3D-Proton
+packages are placed manually (there is no downloader yet).
 
-## Портативная раскладка
+## Portable layout
 
 ```
 Cask/
-├── cask            бинарник
-├── cask.ini        настройки (создаётся рядом с бинарником)
-├── lib/            зависимости (Qt и др.), RPATH = $ORIGIN/lib
-├── lang/           необязательные переводы <код>.json (см. ниже)
+├── cask            the binary
+├── cask.ini        settings (created next to the binary)
+├── lib/            bundled dependencies (Qt etc.), RPATH = $ORIGIN/lib
+├── lang/           optional translations <code>.json (see below)
 ├── data/
-│   ├── runners/<имя>/bin/wine      сборки Wine
-│   ├── d7vk/<версия>/{x64,x32}/*.dll
-│   ├── dxvk/<версия>/{x64,x32}/*.dll
-│   ├── vkd3d-proton/<версия>/{x64,x86}/*.dll
-│   ├── winetricks/                 скрипт winetricks (по желанию) и cache/
-│   └── mangohud/lib64/             портативный MangoHud (по желанию), 64 бит
-└── prefixes/<имя>/                 WINEPREFIX + cask.json
-    └── cache/                      кеш шейдеров префикса
-        ├── dxvk_shader/            DXVK_SHADER_CACHE_PATH (DXVK 3.0+),
-        │                           DXVK_STATE_CACHE_PATH (DXVK < 2.7, D7VK)
-        ├── mesa_shader/            MESA_SHADER_CACHE_DIR
-        └── vkd3d_shader/           VKD3D_SHADER_CACHE_PATH
+│   ├── runners/<name>/bin/wine      Wine builds
+│   ├── d7vk/<version>/{x64,x32}/*.dll
+│   ├── dxvk/<version>/{x64,x32}/*.dll
+│   ├── vkd3d-proton/<version>/{x64,x86}/*.dll
+│   ├── winetricks/                  winetricks script (optional) and cache/
+│   └── mangohud/lib64/              portable MangoHud (optional), 64-bit
+└── prefixes/<name>/                 WINEPREFIX + cask.json
+    └── cache/                       shader caches of the prefix
+        ├── dxvk_shader/             DXVK_SHADER_CACHE_PATH (DXVK 3.0+),
+        │                            DXVK_STATE_CACHE_PATH (DXVK < 2.7, D7VK)
+        ├── mesa_shader/             MESA_SHADER_CACHE_DIR
+        └── vkd3d_shader/            VKD3D_SHADER_CACHE_PATH
 ```
 
-- Корень можно переопределить переменной `CASK_ROOT`.
-- Папки `data` и `prefixes` меняются в «Настройках»; пути внутри корня хранятся относительными.
-- Префикс не хранит абсолютных путей (имя = имя папки), Wine хранится по имени раннера, поэтому всё переносится вместе с папкой.
-- Переменные кеша выставляются автоматически при каждом запуске wine в префиксе.
+- The root can be overridden with the `CASK_ROOT` environment variable.
+- The `data` and `prefixes` folders can be changed in Settings. Paths inside the root are stored as relative.
+- A prefix stores no absolute paths (its name is the folder name) and refers to Wine by runner name,
+  so everything moves together with the folder.
+- The cache variables are set automatically on every Wine launch in a prefix.
 
-## Что умеет
+## Features
 
-- Создание префикса (win64/win32, выбор Wine), удаление.
-- Смена Wine у существующего префикса (`wineboot -u`).
-- D7VK, DXVK, VKD3D-Proton выбираются как в Bottles: у каждого свой список, по умолчанию «Никакой».
-  Выбор версии применяет её (копирование DLL в `system32`/`syswow64`, бэкап оригиналов `*.cask-bak`,
-  DLL overrides через `regedit`), выбор «Никакой» снимает компонент и возвращает оригиналы.
-- Запуск программ. Инструменты: Проводник (`explorer`), Панель управления (`control`), winecfg,
-  regedit, uninstaller, taskmgr.
-- Список префиксов слева: можно перетаскивать вверх и вниз, порядок запоминается
-  (`prefixes/.cask-order.json`, переносится вместе с префиксами).
-- Папки профиля Wine (Desktop, Documents, Downloads, Music, Pictures, Videos...) не ссылаются на
-  домашнюю папку: после создания префикса и после смены Wine ссылки заменяются пустыми
-  обычными папками. Ваши файлы не трогаются.
-  Диск `z:` (корень системы) остаётся как есть.
-- Wine префикса меняется выбором в списке (как компоненты): выбранная сборка сразу применяется
-  (`wineboot -u`).
-- «Остановить все процессы»: `wineserver -k` для префикса, затем SIGKILL всем, у кого в окружении
-  `WINEPREFIX` этого префикса (в том числе запущенным из терминала). Тем же пользуется удаление префикса.
-- Winetricks (Инструменты → Winetricks…): список verbs с поиском и категориями, отметка установленных,
-  установка выбранных с выводом в окне и кнопкой отмены (отмена останавливает и процессы Wine).
-  Verbs `dxvk*`, `vkd3d*`, `d9vk` скрыты: этим занимаются «Компоненты». Скрипт Cask не скачивает:
-  положите его в `data/winetricks/winetricks` или установите пакет `winetricks`. Скачанные winetricks
-  файлы кешируются в `data/winetricks/cache` (`W_CACHE`). Нужны системные `cabextract`, `unzip`, `wget`
-  или `curl`, как для любого winetricks.
+- Create (win64/win32, choice of Wine) and delete prefixes.
+- Change the Wine of an existing prefix by picking it in the list: the selected build is applied
+  immediately (`wineboot -u`).
+- D7VK, DXVK and VKD3D-Proton work like in Bottles: each has its own list, "None" by default. Picking a
+  version applies it (DLLs are copied to `system32`/`syswow64`, originals are backed up as `*.cask-bak`,
+  DLL overrides are set through `regedit`); picking "None" removes the component and restores the originals.
+- Run programs. Tools: Explorer, Control panel, winecfg, regedit, uninstaller, task manager, winetricks.
+- The prefix list can be reordered by drag and drop. The order is remembered in
+  `prefixes/.cask-order.json` and moves together with the prefixes.
+- The Wine profile folders (Desktop, Documents, Downloads, Music, Pictures, Videos...) do not point to your
+  real home directory: after a prefix is created and after its Wine is changed, such links are replaced
+  with empty regular folders. Your files are not touched. The `z:` drive (system root) is left as is.
+- "Stop all processes": runs `wineserver -k` for the prefix, then sends SIGKILL to the Wine processes
+  (executable name starting with `wine`) that have this prefix in their `WINEPREFIX`, including ones started
+  from a terminal. A shell that merely has `WINEPREFIX` exported is not touched. Deleting a prefix and
+  changing its Wine use the same mechanism.
+- Winetricks (Tools → Winetricks…): searchable list of verbs with categories, installed verbs are marked,
+  selected verbs are installed with live output and a cancel button (cancelling also stops the Wine
+  processes). The `dxvk*`, `vkd3d*` and `d9vk` verbs are hidden because Components manages them.
+  Cask does not download the script: put it into `data/winetricks/winetricks` or install the `winetricks`
+  package. Files downloaded by winetricks are cached in `data/winetricks/cache` (`W_CACHE`). As with any
+  winetricks, system tools such as `cabextract`, `unzip` and `wget` or `curl` are needed.
+- Opening files from a file manager: `cask <file.exe|.msi|.bat|.lnk>` shows a prefix picker (prefixes are
+  created in the main window), launches the file with that prefix's settings and exits. The last chosen
+  prefix is offered first.
+- Desktop integration (Settings → "Integrate with the desktop"): creates `cask.desktop` (category
+  Utility) and adds Cask to the `.exe`, `.msi`, `.bat` and `.lnk` entries of
+  `~/.local/share/applications/mimeinfo.cache`, so a double click in the file manager opens Cask. Cask
+  checks the path in the `.desktop` file on every start, which keeps it valid after the folder is moved.
+  When the option is off, the files are removed and only Cask's own lines are taken out of
+  `mimeinfo.cache` (the file itself and other entries stay).
 
-- Запуск файлов из файлового менеджера: `cask <файл.exe|.msi|.bat|.lnk>` открывает окно выбора префикса
-  (префиксы создаются в главном окне), запускает файл с настройками префикса и закрывается. Последний выбранный
-  префикс предлагается первым. Чтобы двойной клик по `.exe` открывал Cask, включите «Интеграцию с рабочим
-  столом» в настройках (создаётся `cask.desktop` в категории «Стандартные» (Utility) и записи в
-  `~/.local/share/applications/mimeinfo.cache`; при выключении всё убирается).
+### Launch settings (per prefix, stored in `cask.json`)
 
-### Настройки запуска (у каждого префикса свои, хранятся в `cask.json`)
-
-| Настройка | Что делает |
+| Setting | What it does |
 |---|---|
-| Язык Wine | Пусто = язык системы, иначе значение для `LANG` и `LC_ALL` (например `ru_RU.UTF-8`; можно ввести своё). |
-| GameMode | Программы, запущенные через «Запустить программу…», стартуют через `gamemoderun` |
-| MangoHud | То же через `mangohud` (системный пакет или портативный, см. ниже). Настройка оверлея: переменная `MANGOHUD_CONFIG` в своих переменных, например `fps,cpu_temp`. Если есть `data/mangohud/lib64/`, используется он, иначе системный `mangohud`. Вместе с GameMode: `gamemoderun mangohud wine ...` |
-| Переменные окружения | Любые свои переменные (например `DXVK_HUD=fps`). **Не заменяют переменные, которыми управляет Cask**: `WINEPREFIX`, `WINEARCH`, `PATH`, `LANG`, `LC_ALL`, `DXVK_STATE_CACHE_PATH`, `DXVK_SHADER_CACHE_PATH`, `MESA_SHADER_CACHE_DIR`, `VKD3D_SHADER_CACHE_PATH`. Такие имена редактор не принимает. Остальные, включая `WINEDEBUG`, применяются |
+| Wine language | Empty = system language, otherwise the value for `LANG` and `LC_ALL` (for example `ru_RU.UTF-8`; you can type your own). |
+| GameMode | Programs started with "Run program…" are launched through `gamemoderun`. |
+| MangoHud | The same through `mangohud` (system package or portable, see below). `gamemoderun mangohud wine ...` when combined with GameMode. |
+| Environment variables | Any custom variables (for example `DXVK_HUD=fps`). **They do not replace variables managed by Cask**: `WINEPREFIX`, `WINEARCH`, `PATH`, `LANG`, `LC_ALL`, `DXVK_STATE_CACHE_PATH`, `DXVK_SHADER_CACHE_PATH`, `MESA_SHADER_CACHE_DIR`, `VKD3D_SHADER_CACHE_PATH`. The editor rejects these names. Everything else, including `WINEDEBUG`, is applied. |
 
-**Портативный MangoHud (только 64 бит).** Из релиза с GitHub (`MangoHud-<версия>.tar.gz`) скопируйте
-папку `MangoHud/pkg/usr/lib/mangohud/lib64/` как `Cask/data/mangohud/lib64/` (нужны `libMangoHud.so`,
-`libMangoHud_shim.so`, `libMangoHud_opengl.so`). Cask сам задаёт `MANGOHUD=1`, `LD_PRELOAD` (OpenGL) и слой
-Vulkan (манифест с путём к вашей копии создаётся в `data/mangohud/layer/`); скрипт `mangohud` не нужен.
-Конфиг: положите `Cask/data/mangohud/MangoHud.conf` (пример в архиве: `usr/share/doc/mangohud/MangoHud.conf.example`), Cask укажет его через `MANGOHUD_CONFIGFILE` (и для системного mangohud тоже). Если эта переменная задана в своих переменных префикса, берётся она; `MANGOHUD_CONFIG` дополняет конфиг сверху. В системе должны быть `libxkbcommon` и `libwayland-client`. 32-битные игры не поддерживаются.
+Cask does not configure synchronization (ntsync etc.): Wine 11 uses ntsync by itself when it is available.
+If a special build needs another mode, add the variable yourself (for example `WINEFSYNC=1`).
 
-Синхронизацию (ntsync и др.) Cask не настраивает: Wine 11 сам использует ntsync, если он доступен.
-Нужен другой режим для особой сборки: добавьте нужную переменную сами (например `WINEFSYNC=1`).
+Custom variables, GameMode and MangoHud apply only to programs started by the user. Cask's internal tasks
+(`wineboot`, `regedit`) run without them (the language is still applied).
 
-Свои переменные и GameMode применяются только к запускам пользователя; внутренние
-задачи Cask (`wineboot`, `regedit`) работают без них (язык учитывается).
+### MangoHud
 
-## Язык интерфейса
+Without any setup Cask uses the system `mangohud` (the `mangohud` package of your distribution).
 
-Русский и английский. По умолчанию берётся язык системы, меняется в «Настройках» сразу, без перезапуска.
-Строки в коде английские, перевод лежит в `resources/lang/<код>.json` (встроен в бинарник).
+**Portable MangoHud (64-bit only).** From a release archive on GitHub (`MangoHud-<version>.tar.gz`), copy
+the folder `MangoHud/pkg/usr/lib/mangohud/lib64/` to `Cask/data/mangohud/lib64/` (it must contain
+`libMangoHud.so`, `libMangoHud_shim.so` and `libMangoHud_opengl.so`). Cask then sets `MANGOHUD=1`,
+`LD_PRELOAD` (OpenGL) and the Vulkan layer itself (a manifest pointing to your copy is generated in
+`data/mangohud/layer/` on launch), so the `mangohud` wrapper script is not needed. `libxkbcommon` and
+`libwayland-client` must be present on the system. 32-bit games are not supported.
 
-Свой язык без пересборки: положите `Cask/lang/<код>.json` вида
-`{"_name": "Deutsch", "Settings": "Einstellungen", ...}`. Непереведённые строки остаются английскими.
-Заготовку со всеми строками выдаёт `python3 scripts/check-translations.py --list`.
+**Configuration.** Put `Cask/data/mangohud/MangoHud.conf` there (an example is in the archive:
+`usr/share/doc/mangohud/MangoHud.conf.example`). Cask points `MANGOHUD_CONFIGFILE` at it, for the system
+`mangohud` as well. If `MANGOHUD_CONFIGFILE` is set in the prefix's custom variables, that value wins.
+`MANGOHUD_CONFIG` still adds parameters on top of the file.
 
-## Сборка
+## Interface language
+
+English and Russian. The system language is used by default and can be changed in Settings without a
+restart. Strings in the code are English; translations live in `resources/lang/<code>.json` (embedded
+into the binary).
+
+To add a language without rebuilding, put `Cask/lang/<code>.json` like
+`{"_name": "Deutsch", "Settings": "Einstellungen", ...}` next to the binary. Untranslated strings stay in
+English. `python3 scripts/check-translations.py --list` prints a skeleton with all strings.
+
+## Building
 
 ```
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -100,11 +115,13 @@ cmake --build build -j
 ./build/Cask/cask
 ```
 
-Нужны Qt 6 (или 5) Widgets и CMake ≥ 3.16. Готовая портативная папка получается в `build/Cask/`.
+Requires Qt 6 (or Qt 5) Widgets and CMake ≥ 3.16. The portable folder is produced in `build/Cask/`.
+`scripts/bundle-linux.sh build/Cask` additionally copies the Qt libraries and plugins into it (needs
+`patchelf`).
 
-Проверки (запускаются и в GitHub Actions):
+Checks (also run by GitHub Actions):
 
 ```
-python3 scripts/check-translations.py     # все строки переведены, плейсхолдеры совпадают
-ctest --test-dir build --output-on-failure   # тесты ядра (нужен Qt Test)
+python3 scripts/check-translations.py        # all strings translated, placeholders match
+ctest --test-dir build --output-on-failure   # core tests (needs Qt Test)
 ```

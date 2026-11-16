@@ -41,8 +41,8 @@ QStringList overrideNames(const QStringList& files)
     return l;
 }
 
-// Рекурсивное удаление, которое НЕ заходит в симлинки
-// (в префиксе dosdevices/z: указывает на "/").
+// Recursive removal that does NOT follow symlinks
+// (in a prefix, dosdevices/z: points to "/").
 bool removeTree(const QString& path)
 {
     const QFileInfo fi(path);
@@ -71,7 +71,7 @@ QList<Prefix> PrefixManager::list() const
         if (auto p = Prefix::load(d.filePath(n)))
             out.append(*p);
 
-    // Порядок пользователя; префиксы, которых в нём нет, идут после, по алфавиту.
+    // User order; prefixes not in it come after, alphabetically.
     const QStringList ord = order();
     auto pos = [&ord](const Prefix& p) {
         const int i = ord.indexOf(p.name);
@@ -121,10 +121,10 @@ int PrefixManager::unlinkUserDirs(const QString& prefixPath)
         const QDir pd(profile.absoluteFilePath());
         const auto entries = pd.entryInfoList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot);
         for (const QFileInfo& e : entries) {
-            // Ссылки внутри префикса (например "My Documents" -> "Documents") не трогаем.
+            // Links inside the prefix (e.g. "My Documents" -> "Documents") are left alone.
             if (!e.isSymLink() || inside(e.symLinkTarget()))
                 continue;
-            if (QFile::remove(e.absoluteFilePath())) {  // удаляет саму ссылку, не её цель
+            if (QFile::remove(e.absoluteFilePath())) {  // removes the link itself, not its target
                 QDir().mkpath(e.absoluteFilePath());
                 ++replaced;
             }
@@ -151,8 +151,8 @@ static bool isWineProcess(qint64 pid)
 
 QList<qint64> PrefixManager::processes(const QString& prefixPath)
 {
-    // Любой процесс, в окружении которого WINEPREFIX указывает на этот префикс:
-    // программы, запущенные из Cask, wineserver, winetricks и то, что запущено из терминала.
+    // Any process whose environment has WINEPREFIX pointing to this prefix:
+    // programs launched from Cask, wineserver, winetricks, and anything started from a terminal.
     QList<QByteArray> wanted{"WINEPREFIX=" + QDir::cleanPath(prefixPath).toLocal8Bit()};
     const QString canon = QFileInfo(prefixPath).canonicalFilePath();
     if (!canon.isEmpty() && canon != QDir::cleanPath(prefixPath))
@@ -168,7 +168,7 @@ QList<qint64> PrefixManager::processes(const QString& prefixPath)
             continue;
         QFile f(QStringLiteral("/proc/%1/environ").arg(pid));
         if (!f.open(QIODevice::ReadOnly))
-            continue;  // чужой процесс или уже завершился
+            continue;  // someone else's process or already exited
         const QList<QByteArray> vars = f.readAll().split('\0');
         for (const QByteArray& v : vars) {
             if (wanted.contains(v)) {
@@ -196,14 +196,14 @@ int PrefixManager::stopProcesses(const Prefix& p)
     if (before == 0)
         return 0;
 
-    // Сначала по-хорошему: wineserver -k завершает все процессы префикса.
+    // Politely first: wineserver -k terminates all prefix processes.
     if (const auto r = RunnerManager::find(p.runner)) {
         QProcess k;
         k.setProcessEnvironment(makeEnv(p, *r, false));
         k.start(wineserverPath(*r), {"-k"});
         k.waitForFinished(5000);
     }
-    // wineserver -k только рассылает сигнал: даём до 3 секунд, затем добиваем оставшихся.
+    // wineserver -k only broadcasts the signal: allow up to 3 seconds, then finish off the survivors.
     QElapsedTimer t;
     t.start();
     while (!processes(p.path).isEmpty() && t.elapsed() < 3000)
@@ -243,10 +243,10 @@ QProcessEnvironment PrefixManager::makeEnv(const Prefix& p, const Runner& r, boo
     if (!e.contains("WINEDEBUG"))
         e.insert("WINEDEBUG", "-all");
 
-    // Кеш шейдеров живёт внутри папки префикса (как в Bottles):
-    //   <префикс>/cache/{dxvk_shader,mesa_shader,vkd3d_shader}
-    // DXVK_STATE_CACHE_PATH: state cache DXVK до 2.7 (убран в 2.7), D7VK как форк
-    // может его использовать. DXVK_SHADER_CACHE_PATH: кеш шейдеров DXVK 3.0+.
+    // The shader cache lives inside the prefix folder (as in Bottles):
+    //  <prefix>/cache/{dxvk_shader,mesa_shader,vkd3d_shader}
+    // DXVK_STATE_CACHE_PATH: DXVK state cache before 2.7 (removed in 2.7); D7VK, as a fork,
+    // may use it. DXVK_SHADER_CACHE_PATH: DXVK 3.0+ shader cache.
     const QString cache = p.path + "/cache";
     const QString dxvk = cache + "/dxvk_shader";
     const QString mesa = cache + "/mesa_shader";
@@ -259,15 +259,15 @@ QProcessEnvironment PrefixManager::makeEnv(const Prefix& p, const Runner& r, boo
     e.insert("MESA_SHADER_CACHE_DIR", mesa);
     e.insert("VKD3D_SHADER_CACHE_PATH", vkd3d);
 
-    // Язык, который видит Wine. Синхронизацию (ntsync и др.) Cask не трогает.
+    // The language Wine sees. Cask does not touch sync (ntsync etc.).
     LaunchSettings::applyLocale(e, p.settings.locale);
 
     if (!forLaunch)
         return e;
 
-    // Свои переменные префикса. Переменные, которыми управляет Cask (WINEPREFIX, PATH, язык,
-    // пути кеша...), они не заменяют. Остальные, в том числе WINEDEBUG (Cask лишь ставит
-    // для него значение по умолчанию), применяются.
+    // The prefix's own variables. Variables managed by Cask (WINEPREFIX, PATH, language,
+    // cache paths...) are not overridden by them. The rest, including WINEDEBUG (Cask only sets
+    // a default value for it), are applied.
     for (auto it = p.settings.env.cbegin(); it != p.settings.env.cend(); ++it) {
         if (LaunchSettings::isValidEnvName(it.key()) && !LaunchSettings::isReservedEnvName(it.key()))
             e.insert(it.key(), it.value());
@@ -366,11 +366,11 @@ bool PrefixManager::create(const QString& name, const QString& runner, const QSt
     emit changed();
 
     QProcessEnvironment env = makeEnv(p, *r, false);
-    env.insert("WINEDLLOVERRIDES", "mscoree,mshtml=d");  // без диалогов Mono/Gecko
+    env.insert("WINEDLLOVERRIDES", "mscoree,mshtml=d");  // no Mono/Gecko dialogs
     startJob(p, *r, {"wineboot", "--init"}, env, tr("Prefix '%1' created").arg(name),
              [this, path](bool ok) {
                  if (ok)
-                     unlinkUserDirs(path);  // Desktop, Documents... не ссылаются на домашнюю папку
+                     unlinkUserDirs(path);  // Desktop, Documents... must not link to the home folder
                  emit changed();
              });
     return true;
@@ -392,7 +392,7 @@ bool PrefixManager::remove(const QString& name, QString* err)
         return false;
     }
 
-    // Останавливаем все процессы префикса, чтобы ничего не осталось в удаляемой папке.
+    // Stop all prefix processes so nothing is left in the folder being deleted.
     stopProcesses(*p);
 
     if (!removeTree(p->path)) {
@@ -433,14 +433,14 @@ bool PrefixManager::setRunner(const QString& name, const QString& runner, QStrin
     startJob(*p, *r, {"wineboot", "-u"}, makeEnv(*p, *r, false),
              tr("Wine of prefix '%1' changed to %2").arg(name, runner), [this, path = p->path](bool ok) {
                  if (ok)
-                     unlinkUserDirs(path);  // wineboot -u мог создать ссылки заново
+                     unlinkUserDirs(path);  // wineboot -u may have recreated the links
                  emit changed();
              });
     return true;
 }
 
-// Откатывает файлы компонента. Возвращает имена overrides, которые больше
-// никому не нужны (их нужно удалить из реестра).
+// Rolls back the component's files. Returns the override names that are no longer
+// needed by anyone (they must be removed from the registry).
 QStringList PrefixManager::restoreFiles(Prefix& p, const QString& type)
 {
     auto it = p.components.find(type);
@@ -484,8 +484,8 @@ void PrefixManager::importOverrides(const Prefix& p, const Runner& r, const QStr
     for (const QString& n : removeNames)
         data += "\"" + n.toUtf8() + "\"=-\r\n";
 
-    // Файл передаём относительным именем с workDir = префикс: так надёжнее,
-    // чем unix-путь в regedit.
+    // Pass the file by relative name with workDir = prefix: more reliable
+    // than a unix path in regedit.
     const QString regName = QStringLiteral("cask-overrides.reg");
     const QString regPath = p.path + "/" + regName;
     QFile f(regPath);
@@ -531,7 +531,7 @@ bool PrefixManager::applyComponent(const QString& name, const QString& type, con
         return false;
     }
 
-    // План копирования: (исходный файл, путь относительно windows/)
+    // Copy plan: (source file, path relative to windows/)
     struct Item { QString src; QString rel; };
     struct Map { QStringList srcDirs; QString dst; };
     QList<Map> maps;
@@ -548,7 +548,7 @@ bool PrefixManager::applyComponent(const QString& name, const QString& type, con
                 continue;
             for (const QString& dll : sd.entryList({"*.dll"}, QDir::Files))
                 plan.append({sd.filePath(dll), m.dst + "/" + dll});
-            break;  // берём первую существующую подпапку
+            break;  // take the first existing subfolder
         }
     }
     if (plan.isEmpty()) {
@@ -556,7 +556,7 @@ bool PrefixManager::applyComponent(const QString& name, const QString& type, con
         return false;
     }
 
-    // Старую версию этого же компонента откатываем.
+    // Roll back the old version of this same component.
     const QStringList staleOverrides = restoreFiles(p, type);
 
     AppliedComponent a;
@@ -564,7 +564,7 @@ bool PrefixManager::applyComponent(const QString& name, const QString& type, con
     for (const Item& it : std::as_const(plan)) {
         const QString dst = win + "/" + it.rel;
         if (QFile::exists(dst) && !QFile::exists(dst + kBak))
-            QFile::rename(dst, dst + kBak);  // сохраняем оригинал один раз
+            QFile::rename(dst, dst + kBak);  // keep the original once
         QFile::remove(dst);
         if (!QFile::copy(it.src, dst)) {
             p.components.insert(type, a);
@@ -576,7 +576,7 @@ bool PrefixManager::applyComponent(const QString& name, const QString& type, con
         }
         QFile::setPermissions(dst, QFile::permissions(dst) | QFile::WriteOwner);
         a.files << it.rel;
-        // файл теперь принадлежит этому компоненту (последний применённый побеждает)
+        // the file now belongs to this component (the last one applied wins)
         for (auto c = p.components.begin(); c != p.components.end(); ++c)
             c->files.removeAll(it.rel);
     }
@@ -641,7 +641,7 @@ bool PrefixManager::launch(const QString& name, const QStringList& wineArgs, con
         return false;
     }
 
-    // Обёртки: gamemoderun mangohud wine ...
+    // Wrappers: gamemoderun mangohud wine ...
     QStringList chain;
     if (game && p->settings.gamemode) {
         const QString gm = LaunchSettings::gamemodeBinary();
@@ -655,7 +655,7 @@ bool PrefixManager::launch(const QString& name, const QStringList& wineArgs, con
     bool portableHud = false;
     if (game && p->settings.mangohud) {
         if (LaunchSettings::hasPortableMangohud()) {
-            portableHud = true;  // окружение добавляется ниже, обёртка не нужна
+            portableHud = true;  // the environment is added below, no wrapper needed
         } else {
             const QString mh = LaunchSettings::mangohudBinary();
             if (!mh.isEmpty())

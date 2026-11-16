@@ -11,7 +11,7 @@ namespace Components {
 const QList<Type>& types()
 {
     static const QList<Type> t = {
-        // Порядок = порядок строк в интерфейсе.
+        // Order = order of the rows in the UI.
         {QStringLiteral("d7vk"), QStringLiteral("D7VK"),
          {QStringLiteral("x64")}, {QStringLiteral("x32"), QStringLiteral("x86")}},
         {QStringLiteral("dxvk"), QStringLiteral("DXVK"),

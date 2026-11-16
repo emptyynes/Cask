@@ -80,7 +80,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
 
 void MainWindow::buildUi()
 {
-    // Тулбар
+    // Toolbar
     m_toolbar = addToolBar(tr("Main"));
     m_toolbar->setMovable(false);
     auto addAct = [&](const QString& text, void (MainWindow::*slot)()) {
@@ -91,7 +91,7 @@ void MainWindow::buildUi()
     addAct(tr("Refresh"), &MainWindow::refresh);
     addAct(tr("Settings"), &MainWindow::openSettings);
 
-    // Центр: список префиксов слева, детали справа
+    // Center: prefix list on the left, details on the right
     m_central = new QSplitter(this);
     m_central->setChildrenCollapsible(false);
     m_central->setHandleWidth(1);
@@ -108,7 +108,7 @@ void MainWindow::buildUi()
     listTitle->setFont(titleFont);
     lv->addWidget(listTitle);
 
-    // Обычный список без своих стилей: вид целиком определяет системная тема.
+    // Plain list without custom styles: the look is fully determined by the system theme.
     m_list = new QListWidget;
     m_list->setSelectionMode(QAbstractItemView::SingleSelection);
     m_list->setDragEnabled(true);
@@ -134,7 +134,7 @@ void MainWindow::buildUi()
     m_path->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_path->setWordWrap(true);
     m_arch = new QLabel;
-    // Wine меняется так же, как компоненты: выбор в списке сразу применяется.
+    // Wine changes the same way as components: a selection in the list is applied immediately.
     m_runnerBox = new QComboBox;
     connect(m_runnerBox, QOverload<int>::of(&QComboBox::activated), this, [this](int) {
         QTimer::singleShot(0, this, [this] { applyRunner(); });
@@ -145,7 +145,7 @@ void MainWindow::buildUi()
     form->addRow(tr("Wine"), m_runnerBox);
     v->addWidget(info);
 
-    // Компоненты: «Никакой» по умолчанию; выбор версии применяет её, «Никакой» снимает.
+    // Components: "None" by default; selecting a version applies it, "None" removes it.
     auto* comps = new QGroupBox(tr("Components"));
     auto* grid = new QGridLayout(comps);
     int row = 0;
@@ -154,14 +154,14 @@ void MainWindow::buildUi()
         cr.type = t.id;
         cr.versions = new QComboBox;
         cr.hint = new QLabel;
-        cr.hint->setEnabled(false);  // приглушённый цвет
+        cr.hint->setEnabled(false);  // dimmed color
         cr.hint->setWordWrap(true);
         grid->addWidget(new QLabel(t.title), row, 0);
         grid->addWidget(cr.versions, row, 1);
         grid->addWidget(cr.hint, row, 2);
         const QString type = t.id;
-        // activated срабатывает только от действий пользователя, не при заполнении списка.
-        // Обработчик откладываем, чтобы не перестраивать список внутри его же сигнала.
+        // activated fires only on user actions, not while the list is being filled.
+        // Defer the handler so the list is not rebuilt inside its own signal.
         connect(cr.versions, QOverload<int>::of(&QComboBox::activated), this, [this, type](int) {
             QTimer::singleShot(0, this, [this, type] { componentChosen(type); });
         });
@@ -172,7 +172,7 @@ void MainWindow::buildUi()
     grid->setColumnStretch(2, 3);
     v->addWidget(comps);
 
-    // Настройки запуска
+    // Launch settings
     auto* launch = new QGroupBox(tr("Launch settings"));
     auto* lf = new QFormLayout(launch);
 
@@ -215,7 +215,7 @@ void MainWindow::buildUi()
     connect(m_envBtn, &QPushButton::clicked, this, &MainWindow::editEnv);
     v->addWidget(launch);
 
-    // Действия
+    // Actions
     auto* actions = new QHBoxLayout;
     auto* runBtn = new QPushButton(tr("Run program…"));
     connect(runBtn, &QPushButton::clicked, this, &MainWindow::runExe);
@@ -269,7 +269,7 @@ void MainWindow::retranslate()
     delete m_toolbar;
     m_toolbar = nullptr;
     m_rows.clear();
-    buildUi();  // setCentralWidget удаляет прежний центральный виджет
+    buildUi();  // setCentralWidget deletes the previous central widget
     refresh();
     if (!keep.isEmpty())
         selectByName(keep);
@@ -308,7 +308,7 @@ void MainWindow::refresh()
         for (const Prefix& p : m_mgr.list()) {
             auto* it = new QListWidgetItem(p.name);
             it->setData(Qt::UserRole, p.name);
-            it->setSizeHint(QSize(0, 30));  // чуть выше стандартной строки: проще попасть мышью
+            it->setSizeHint(QSize(0, 30));  // slightly taller than the standard row: easier to hit with the mouse
             m_list->addItem(it);
         }
         if (!keep.isEmpty())
@@ -321,7 +321,7 @@ void MainWindow::refresh()
 
 QString MainWindow::localeValue() const
 {
-    // Текст совпал с пунктом списка: берём его значение, иначе это введённая вручную локаль.
+    // The text matched a list item: use its value, otherwise it is a manually entered locale.
     const QString text = m_localeBox->currentText().trimmed();
     const int idx = m_localeBox->findText(text, Qt::MatchFixedString);
     return idx >= 0 ? m_localeBox->itemData(idx).toString() : text;
@@ -386,7 +386,7 @@ void MainWindow::onSelected()
         for (const QString& v : vers)
             cr.versions->addItem(v, v);
 
-        // Показываем реально применённую версию; если её папки в data уже нет, добавляем пункт.
+        // Show the version actually applied; if its folder is gone from data, add an item for it.
         const auto it = p.components.constFind(cr.type);
         int sel = 0;
         if (it != p.components.constEnd()) {
@@ -431,7 +431,7 @@ void MainWindow::componentChosen(const QString& type)
                                          : m_mgr.applyComponent(name, type, chosen, &err);
         if (!ok) {
             QMessageBox::warning(this, QStringLiteral("Cask"), err);
-            onSelected();  // вернуть список к реальному состоянию
+            onSelected();  // restore the list to the real state
         }
         return;
     }
@@ -555,7 +555,7 @@ void MainWindow::applyRunner()
     QString err;
     if (!m_mgr.setRunner(name, runner, &err)) {
         QMessageBox::warning(this, QStringLiteral("Cask"), err);
-        onSelected();  // вернуть список к реальному Wine префикса
+        onSelected();  // restore the list to the prefix's real Wine
     }
 }
 
@@ -564,7 +564,7 @@ void MainWindow::stopAll()
     const QString name = currentName();
     if (name.isEmpty())
         return;
-    QApplication::setOverrideCursor(Qt::WaitCursor);  // остановка может занять несколько секунд
+    QApplication::setOverrideCursor(Qt::WaitCursor);  // stopping may take a few seconds
     QString err;
     const bool ok = m_mgr.stopAll(name, &err);
     QApplication::restoreOverrideCursor();

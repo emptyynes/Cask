@@ -16,7 +16,7 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 
-// Редактор переменных окружения префикса (таблица «имя / значение»).
+// Editor for the prefix environment variables ("name / value" table).
 class EnvDialog : public QDialog {
     Q_OBJECT
 public:

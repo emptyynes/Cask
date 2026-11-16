@@ -8,15 +8,15 @@
 #include <QStringList>
 #include <optional>
 
-// Применённый компонент: файлы записаны относительно drive_c/windows
-// (например "system32/d3d11.dll"), чтобы их можно было откатить.
+// An applied component: files are recorded relative to drive_c/windows
+// (e.g. "system32/d3d11.dll") so they can be rolled back.
 struct AppliedComponent {
     QString version;
     QStringList files;
 };
 
-// Префикс = папка prefixes/<имя>/ (она же WINEPREFIX) с метаданными cask.json.
-// Абсолютный путь не хранится, поэтому папку префиксов можно переносить.
+// A prefix = a prefixes/<name>/ folder (also the WINEPREFIX) with cask.json metadata.
+// The absolute path is not stored, so the prefixes folder can be moved.
 struct Prefix {
     QString name;
     QString path;

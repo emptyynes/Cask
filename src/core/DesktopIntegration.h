@@ -4,22 +4,22 @@
 #include <QString>
 #include <QStringList>
 
-// Интеграция с рабочим столом: файл cask.desktop и строки в mimeinfo.cache
-// (оба в ~/.local/share/applications, точнее в $XDG_DATA_HOME/applications).
+// Desktop integration: the cask.desktop file and lines in mimeinfo.cache
+// (both in ~/.local/share/applications, more precisely $XDG_DATA_HOME/applications).
 //
-// install() идемпотентна: при каждом вызове сверяет путь к бинарнику в .desktop и строки кеша
-// с ожидаемыми и исправляет только то, что отличается (папку Cask могли переместить).
-// remove() удаляет cask.desktop и убирает из mimeinfo.cache только записи cask.desktop;
-// сам mimeinfo.cache и чужие строки остаются.
+// install() is idempotent: on every call it checks the binary path in .desktop and the cache lines
+// against the expected ones and fixes only what differs (the Cask folder may have been moved).
+// remove() deletes cask.desktop and removes only cask.desktop entries from mimeinfo.cache;
+// mimeinfo.cache itself and other lines stay.
 namespace DesktopIntegration {
 
 QString applicationsDir();             // $XDG_DATA_HOME/applications
 QString desktopFileName();             // "cask.desktop"
-QStringList mimeTypes();               // типы, которые Cask берёт на себя (exe, msi, bat, lnk)
+QStringList mimeTypes();               // types Cask takes over (exe, msi, bat, lnk)
 
 QByteArray desktopContent(const QString& exePath);
 
-// Чистая функция над текстом mimeinfo.cache: добавляет (в начало списка каждого типа) или убирает cask.desktop.
+// Pure function over mimeinfo.cache text: adds cask.desktop (at the front of each type list) or removes it.
 QByteArray updateMimeCache(const QByteArray& cache, bool add);
 
 bool isInstalled(const QString& appsDir);

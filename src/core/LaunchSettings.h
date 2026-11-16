@@ -5,13 +5,13 @@
 #include <QString>
 #include <QStringList>
 
-// Настройки запуска, хранятся у каждого префикса отдельно (cask.json -> "settings").
-// Синхронизацию (esync/fsync/ntsync) Cask не трогает: современный Wine сам выбирает ntsync.
+// Launch settings, stored separately for each prefix (cask.json -> "settings").
+// Cask leaves synchronization (esync/fsync/ntsync) alone: modern Wine picks ntsync itself.
 struct PrefixSettings {
-    QString locale;                          // пусто = язык системы, иначе например ru_RU.UTF-8
-    bool gamemode = false;                   // запускать программы через gamemoderun
-    bool mangohud = false;                   // запускать программы через mangohud
-    QMap<QString, QString> env;              // свои переменные окружения
+    QString locale;                          // empty = system language, otherwise e.g. ru_RU.UTF-8
+    bool gamemode = false;                   // run programs via gamemoderun
+    bool mangohud = false;                   // run programs via mangohud
+    QMap<QString, QString> env;              // custom environment variables
 
     bool operator==(const PrefixSettings& o) const
     {
@@ -26,25 +26,25 @@ QStringList localePresets();
 
 bool isValidEnvName(const QString& name);
 
-// Переменные, которыми управляет сам Cask. Свои переменные их не заменяют.
+// Variables managed by Cask itself. Custom variables do not override them.
 const QStringList& reservedEnvNames();
 bool isReservedEnvName(const QString& name);
 
-// LANG и LC_ALL: именно их читает Wine при выборе языка.
+// LANG and LC_ALL: these are what Wine reads to choose its language.
 void applyLocale(QProcessEnvironment& env, const QString& locale);
 
-QString gamemodeBinary();    // путь к gamemoderun или пусто
-QString mangohudBinary();    // путь к mangohud или пусто
+QString gamemodeBinary();    // path to gamemoderun or empty
+QString mangohudBinary();    // path to mangohud or empty
 
-// Портативный MangoHud (только 64 бит): data/mangohud/lib64/libMangoHud{,_shim,_opengl}.so
+// Portable MangoHud (64-bit only): data/mangohud/lib64/libMangoHud{,_shim,_opengl}.so
 QString mangohudDir();       // <data>/mangohud
-bool hasPortableMangohud();  // есть ли data/mangohud/lib64/libMangoHud_shim.so и libMangoHud.so
-// Добавляет в env: MANGOHUD=1, LD_PRELOAD с shim (для OpenGL) и путь к слою Vulkan
-// (слой с абсолютным путём к библиотеке создаётся в <data>/mangohud/layer при каждом вызове).
+bool hasPortableMangohud();  // whether data/mangohud/lib64/libMangoHud_shim.so and libMangoHud.so exist
+// Adds to env: MANGOHUD=1, LD_PRELOAD with the shim (for OpenGL) and the Vulkan layer path
+// (a layer with an absolute library path is created in <data>/mangohud/layer on every call).
 bool applyPortableMangohud(QProcessEnvironment& env);
 
-// Если есть <data>/mangohud/MangoHud.conf и MANGOHUD_CONFIGFILE не задан, указывает на него.
-// Работает и с системным mangohud. Возвращает true, если переменная выставлена.
+// If <data>/mangohud/MangoHud.conf exists and MANGOHUD_CONFIGFILE is unset, points it there.
+// Works with the system mangohud too. Returns true if the variable was set.
 QString mangohudConfigPath();
 bool applyMangohudConfig(QProcessEnvironment& env);
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Проверка переводов Cask.
+"""Cask translation check.
 
-Все строки tr("...") из src/ должны быть во всех resources/lang/*.json, без лишних
-ключей, с теми же плейсхолдерами (%1, %2...) в переводе.
+Every tr("...") string from src/ must be present in all resources/lang/*.json, with no extra
+keys, and with the same placeholders (%1, %2...) in the translation.
 
-    scripts/check-translations.py            проверить (код возврата 1 при ошибках)
-    scripts/check-translations.py --list     вывести заготовку для нового языка
+    scripts/check-translations.py            check (exit code 1 on errors)
+    scripts/check-translations.py --list     print a template for a new language
 """
 import json
 import pathlib
@@ -19,7 +19,7 @@ PH_RE = re.compile(r'%\d+')
 
 
 def extract():
-    """Возвращает {ключ: 'файл:строка'}."""
+    """Returns {key: 'file:line'}."""
     keys = {}
     for path in sorted((ROOT / "src").rglob("*")):
         if path.suffix not in (".cpp", ".h"):

@@ -40,8 +40,8 @@ private slots:
     void editEnv();
 
 private:
-    // Строка компонента: список «Никакой / версии». Выбор версии применяет её,
-    // выбор «Никакой» снимает компонент.
+    // Component row: a "None / versions" list. Selecting a version applies it,
+    // selecting "None" removes the component.
     struct CompRow {
         QString type;
         QComboBox* versions = nullptr;
@@ -49,7 +49,7 @@ private:
     };
 
     void buildUi();
-    void retranslate();  // пересобирает интерфейс после смены языка
+    void retranslate();  // rebuilds the UI after a language change
     void runTool(const QStringList& wineArgs);
     void componentChosen(const QString& type);
     void saveOrder();
@@ -70,13 +70,13 @@ private:
     QComboBox* m_runnerBox = nullptr;
     QList<CompRow> m_rows;
 
-    // Настройки запуска
+    // Launch settings
     QComboBox* m_localeBox = nullptr;
     QCheckBox* m_gamemode = nullptr;
     QCheckBox* m_mangohud = nullptr;
     QPushButton* m_envBtn = nullptr;
     QMap<QString, QString> m_env;
-    bool m_loading = false;  // true, пока элементы заполняются из префикса (не сохранять)
+    bool m_loading = false;  // true while widgets are being filled from the prefix (do not save)
 
     QProgressBar* m_busy = nullptr;
 };

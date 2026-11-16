@@ -56,7 +56,7 @@ std::optional<Prefix> Prefix::load(const QString& dir)
 
     Prefix p;
     p.path = QDir::cleanPath(dir);
-    p.name = QFileInfo(p.path).fileName();  // имя = имя папки
+    p.name = QFileInfo(p.path).fileName();  // name = folder name
     p.runner = o.value("runner").toString("system");
     p.arch = o.value("arch").toString("win64");
     p.created = QDateTime::fromString(o.value("created").toString(), Qt::ISODate);
@@ -77,7 +77,7 @@ std::optional<Prefix> Prefix::load(const QString& dir)
     p.settings.mangohud = s.value("mangohud").toBool(false);
     const QJsonObject env = s.value("env").toObject();
     for (auto it = env.begin(); it != env.end(); ++it) {
-        // Если cask.json правили руками: переменные, которыми управляет Cask, отбрасываются.
+        // If cask.json was edited by hand: variables managed by Cask are dropped.
         if (LaunchSettings::isValidEnvName(it.key()) && !LaunchSettings::isReservedEnvName(it.key()))
             p.settings.env.insert(it.key(), it.value().toString());
     }

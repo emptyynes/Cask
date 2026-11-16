@@ -4,25 +4,25 @@
 #include <QString>
 #include <memory>
 
-// Портативная конфигурация.
+// Portable configuration.
 //
-// Корень Cask = папка с бинарником (или $CASK_ROOT):
+// Cask root = the folder with the binary (or $CASK_ROOT):
 //   Cask/
-//     cask            бинарник
-//     cask.ini        настройки (лежат рядом, не в ~/.config)
-//     lib/            зависимости (Qt и т.п.)
+//     cask            the binary
+//     cask.ini        settings (stored alongside, not in ~/.config)
+//     lib/            dependencies (Qt etc.)
 //     data/           runners/, dxvk/, d7vk/, vkd3d-proton/
-//     prefixes/       префиксы
+//     prefixes/       prefixes
 //
-// Пути data и prefixes можно переопределить в настройках. Если путь внутри
-// корня, он хранится относительным, поэтому папку Cask можно переносить целиком.
+// The data and prefixes paths can be overridden in settings. If a path is inside
+// the root, it is stored as relative, so the whole Cask folder can be moved.
 class Config {
 public:
     static Config& instance();
 
     QString rootDir() const { return m_root; }
     QString libDir() const;
-    QString langDir() const;  // необязательные внешние переводы: lang/<код>.json
+    QString langDir() const;  // optional external translations: lang/<code>.json
     QString dataDir() const;
     QString prefixesDir() const;
     QString runnersDir() const;
@@ -31,15 +31,15 @@ public:
     void setDataDir(const QString& absPath);
     void setPrefixesDir(const QString& absPath);
 
-    // "system" (по умолчанию, язык системы) или код языка ("en", "ru").
+    // "system" (default, the system language) or a language code ("en", "ru").
     QString language() const;
     void setLanguage(const QString& code);
 
-    // Интеграция с рабочим столом (.desktop + mimeinfo.cache), по умолчанию выключена.
+    // Desktop integration (.desktop + mimeinfo.cache), off by default.
     bool desktopIntegration() const;
     void setDesktopIntegration(bool on);
 
-    // Последний префикс, выбранный при запуске файла (предлагается первым).
+    // The last prefix selected when launching a file (offered first).
     QString lastPrefix() const;
     void setLastPrefix(const QString& name);
 

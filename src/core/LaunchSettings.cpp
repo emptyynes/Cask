@@ -27,7 +27,7 @@ bool isValidEnvName(const QString& name)
 
 const QStringList& reservedEnvNames()
 {
-    // Должен совпадать с тем, что выставляет PrefixManager::makeEnv.
+    // Must match what PrefixManager::makeEnv sets.
     static const QStringList names{
         QStringLiteral("WINEPREFIX"),
         QStringLiteral("WINEARCH"),
@@ -108,7 +108,7 @@ bool applyPortableMangohud(QProcessEnvironment& env)
     const QString shim = lib.absoluteFilePath(QStringLiteral("libMangoHud_shim.so"));
     const QString layerDir = QDir(mangohudDir()).absoluteFilePath(QStringLiteral("layer"));
 
-    // Манифест слоя из релиза указывает на /usr/lib/mangohud, поэтому пишем свой, с путём к нашей копии.
+    // The release layer manifest points to /usr/lib/mangohud, so we write our own, with the path to our copy.
     const QByteArray json = QByteArrayLiteral(
                                 "{\n"
                                 "  \"file_format_version\": \"1.0.0\",\n"
@@ -140,7 +140,7 @@ bool applyPortableMangohud(QProcessEnvironment& env)
     }
 
     env.insert(QStringLiteral("MANGOHUD"), QStringLiteral("1"));
-    // shim ищет libMangoHud_opengl.so рядом с собой; уже заданный LD_PRELOAD сохраняется.
+    // the shim looks for libMangoHud_opengl.so next to itself; an already set LD_PRELOAD is preserved.
     const QString pre = env.value(QStringLiteral("LD_PRELOAD"));
     if (!pre.split(':', Qt::SkipEmptyParts).contains(shim))
         env.insert(QStringLiteral("LD_PRELOAD"), pre.isEmpty() ? shim : pre + QLatin1Char(':') + shim);

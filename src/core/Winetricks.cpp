@@ -63,8 +63,8 @@ QList<Verb> parseList(const QByteArray& output)
     static const QRegularExpression header(QStringLiteral("^=+\\s*(\\S+)\\s*=+$"));
     static const QRegularExpression verbLine(QStringLiteral("^(\\S+)\\s+(.*)$"));
 
-    // Если в выводе есть заголовки категорий, всё до первого из них (баннер winetricks,
-    // предупреждения) не считается списком.
+    // If the output has category headers, everything before the first one (winetricks banner,
+    // warnings) is not treated as the list.
     const bool hasHeaders = output.contains("=====");
 
     QList<Verb> out;

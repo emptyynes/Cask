@@ -31,8 +31,8 @@ QStringList mimeTypes()
             QStringLiteral("application/x-bat")};
 }
 
-// Значение Exec: путь в двойных кавычках (спецсимволы экранируются по спецификации Desktop Entry),
-// затем ещё раз удваиваются обратные слэши на уровне самого файла.
+// Exec value: path in double quotes (special characters escaped per the Desktop Entry spec),
+// then backslashes are doubled once more at the file level.
 static QString execQuote(const QString& path)
 {
     QString s;
@@ -173,7 +173,7 @@ bool remove(const QString& appsDir, QString* err)
         return false;
     }
 
-    // mimeinfo.cache не создаём и не удаляем: только убираем свои записи, если файл есть.
+    // We neither create nor delete mimeinfo.cache: we only remove our own entries if the file exists.
     const QString cachePath = appsDir + QStringLiteral("/mimeinfo.cache");
     QByteArray cur;
     if (!readFile(cachePath, &cur))

@@ -19,15 +19,15 @@ int main(int argc, char* argv[])
 
     Config& cfg = Config::instance();
     cfg.ensureLayout();
-    I18n::apply(cfg.language());  // по умолчанию "system": язык берётся из системы
+    I18n::apply(cfg.language());  // by default "system": the language is taken from the system
 
-    // Папку с Cask могли переместить: сверяем .desktop и mimeinfo.cache; если интеграция выключена, убираем следы.
+    // The Cask folder may have been moved: re-check .desktop and mimeinfo.cache; if integration is off, remove the leftovers.
     QString desktopErr;
     if (!DesktopIntegration::sync(cfg.desktopIntegration(), DesktopIntegration::applicationsDir(),
                                   app.applicationFilePath(), &desktopErr))
         qWarning("Desktop integration: %s", qPrintable(desktopErr));
 
-    // Запуск файла из файлового менеджера: cask <файл>. Показываем выбор префикса и запускаем, главное окно не нужно.
+    // Launching a file from the file manager: cask <file>. Show the prefix picker and run it; the main window is not needed.
     QString file;
     for (const QString& a : app.arguments().mid(1)) {
         if (!a.startsWith('-')) {

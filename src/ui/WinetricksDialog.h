@@ -20,8 +20,8 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
-// Winetricks для одного префикса: список verbs с поиском и категориями, установка выбранных
-// с выводом в окне, отмена. Отмена останавливает и дочерние процессы Wine.
+// Winetricks for a single prefix: a list of verbs with search and categories, installation of the selected ones
+// with output in the window, and cancel. Cancel also stops the child Wine processes.
 class WinetricksDialog : public QDialog {
     Q_OBJECT
 public:
@@ -101,7 +101,7 @@ public:
     void reject() override
     {
         if (m_mode == Installing)
-            return;  // сначала «Отменить установку»
+            return;  // first "Cancel installation"
         if (m_proc) {
             m_proc->kill();
             m_proc->waitForFinished(1000);
@@ -129,8 +129,8 @@ private:
         m_buffer.clear();
         m_proc = new QProcess(this);
         m_proc->setProcessEnvironment(Winetricks::makeEnv(m_prefix, m_runner));
-        // Списки читаем из stdout, предупреждения идут в stderr самого Cask.
-        // Установка: весь вывод в окно.
+        // Lists are read from stdout; warnings go to Cask's own stderr.
+        // Installation: all output goes to the window.
         m_proc->setProcessChannelMode(mode == Installing ? QProcess::MergedChannels
                                                          : QProcess::ForwardedErrorChannel);
         m_proc->setProgram(m_program);
@@ -143,7 +143,7 @@ private:
                 onFinished(-1, QProcess::CrashExit);
         });
         m_proc->start();
-        m_proc->closeWriteChannel();  // вопросов в терминале быть не должно
+        m_proc->closeWriteChannel();  // no questions should appear in the terminal
         updateButtons();
     }
 
@@ -233,7 +233,7 @@ private:
         applyFilter();
     }
 
-    // «Установлен» отмечается в колонке статуса; такие строки нельзя выбрать.
+    // "Installed" is marked in the status column; such rows cannot be selected.
     void updateStatuses()
     {
         const QSignalBlocker blocker(m_tree);
@@ -310,7 +310,7 @@ private:
         m_cancelled = true;
         appendOutput(tr("Cancelling…") + QLatin1Char('\n'));
         m_proc->terminate();
-        // Останавливает и то, что winetricks успел запустить (установщики, wineserver).
+        // Also stops whatever winetricks has started (installers, wineserver).
         QString err;
         m_mgr->stopAll(m_prefix.name, &err);
     }
