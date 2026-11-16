@@ -14,7 +14,9 @@ Cask/
 │   ├── runners/<имя>/bin/wine      сборки Wine
 │   ├── d7vk/<версия>/{x64,x32}/*.dll
 │   ├── dxvk/<версия>/{x64,x32}/*.dll
-│   └── vkd3d-proton/<версия>/{x64,x86}/*.dll
+│   ├── vkd3d-proton/<версия>/{x64,x86}/*.dll
+│   ├── winetricks/                 скрипт winetricks (по желанию) и cache/
+│   └── mangohud/lib64/             портативный MangoHud (по желанию), 64 бит
 └── prefixes/<имя>/                 WINEPREFIX + cask.json
     └── cache/                      кеш шейдеров префикса
         ├── dxvk_shader/            DXVK_SHADER_CACHE_PATH (DXVK 3.0+),
@@ -60,8 +62,14 @@ Cask/
 |---|---|
 | Язык Wine | Пусто = язык системы, иначе значение для `LANG` и `LC_ALL` (например `ru_RU.UTF-8`; можно ввести своё). |
 | GameMode | Программы, запущенные через «Запустить программу…», стартуют через `gamemoderun` |
-| MangoHud | То же через `mangohud` (нужен установленный пакет). Настройка оверлея: переменная `MANGOHUD_CONFIG` в своих переменных, например `fps,cpu_temp`. Вместе с GameMode цепочка такая: `gamemoderun mangohud wine ...` |
+| MangoHud | То же через `mangohud` (системный пакет или портативный, см. ниже). Настройка оверлея: переменная `MANGOHUD_CONFIG` в своих переменных, например `fps,cpu_temp`. Если есть `data/mangohud/lib64/`, используется он, иначе системный `mangohud`. Вместе с GameMode: `gamemoderun mangohud wine ...` |
 | Переменные окружения | Любые свои переменные (например `DXVK_HUD=fps`). **Не заменяют переменные, которыми управляет Cask**: `WINEPREFIX`, `WINEARCH`, `PATH`, `LANG`, `LC_ALL`, `DXVK_STATE_CACHE_PATH`, `DXVK_SHADER_CACHE_PATH`, `MESA_SHADER_CACHE_DIR`, `VKD3D_SHADER_CACHE_PATH`. Такие имена редактор не принимает. Остальные, включая `WINEDEBUG`, применяются |
+
+**Портативный MangoHud (только 64 бит).** Из релиза с GitHub (`MangoHud-<версия>.tar.gz`) скопируйте
+папку `MangoHud/pkg/usr/lib/mangohud/lib64/` как `Cask/data/mangohud/lib64/` (нужны `libMangoHud.so`,
+`libMangoHud_shim.so`, `libMangoHud_opengl.so`). Cask сам задаёт `MANGOHUD=1`, `LD_PRELOAD` (OpenGL) и слой
+Vulkan (манифест с путём к вашей копии создаётся в `data/mangohud/layer/`); скрипт `mangohud` не нужен.
+В системе должны быть `libxkbcommon` и `libwayland-client`. 32-битные игры не поддерживаются.
 
 Синхронизацию (ntsync и др.) Cask не настраивает: Wine 11 сам использует ntsync, если он доступен.
 Нужен другой режим для особой сборки: добавьте нужную переменную сами (например `WINEFSYNC=1`).
