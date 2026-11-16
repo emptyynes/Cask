@@ -78,6 +78,19 @@ bool hasPortableMangohud()
            QFile::exists(lib + QStringLiteral("/libMangoHud.so"));
 }
 
+QString mangohudConfigPath()
+{
+    return mangohudDir() + QStringLiteral("/MangoHud.conf");
+}
+
+bool applyMangohudConfig(QProcessEnvironment& env)
+{
+    if (env.contains(QStringLiteral("MANGOHUD_CONFIGFILE")) || !QFile::exists(mangohudConfigPath()))
+        return false;
+    env.insert(QStringLiteral("MANGOHUD_CONFIGFILE"), QDir(mangohudDir()).absoluteFilePath(QStringLiteral("MangoHud.conf")));
+    return true;
+}
+
 static void prependPath(QProcessEnvironment& env, const QString& var, const QString& dir, const QString& sep)
 {
     const QString old = env.value(var);

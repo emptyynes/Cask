@@ -43,4 +43,9 @@ bool hasPortableMangohud();  // есть ли data/mangohud/lib64/libMangoHud_sh
 // (слой с абсолютным путём к библиотеке создаётся в <data>/mangohud/layer при каждом вызове).
 bool applyPortableMangohud(QProcessEnvironment& env);
 
+// Если есть <data>/mangohud/MangoHud.conf и MANGOHUD_CONFIGFILE не задан, указывает на него.
+// Работает и с системным mangohud. Возвращает true, если переменная выставлена.
+QString mangohudConfigPath();
+bool applyMangohudConfig(QProcessEnvironment& env);
+
 }  // namespace LaunchSettings

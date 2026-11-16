@@ -304,6 +304,24 @@ private slots:
         QCOMPARE(doc.object()["layer"].toObject()["library_path"].toString(), lib + "/libMangoHud.so");
     }
 
+    void mangohudConfigFromDataFolder()
+    {
+        QFile::remove(LaunchSettings::mangohudConfigPath());
+        QProcessEnvironment env;
+        QVERIFY(!LaunchSettings::applyMangohudConfig(env));
+        QVERIFY(!env.contains("MANGOHUD_CONFIGFILE"));
+
+        writeFile(LaunchSettings::mangohudConfigPath(), "fps\n");
+        QVERIFY(LaunchSettings::applyMangohudConfig(env));
+        QCOMPARE(env.value("MANGOHUD_CONFIGFILE"), LaunchSettings::mangohudDir() + "/MangoHud.conf");
+
+        // уже заданную пользователем переменную не трогаем
+        QProcessEnvironment own;
+        own.insert("MANGOHUD_CONFIGFILE", "/my.conf");
+        QVERIFY(!LaunchSettings::applyMangohudConfig(own));
+        QCOMPARE(own.value("MANGOHUD_CONFIGFILE"), QString("/my.conf"));
+    }
+
     // ---- winetricks ----
 
     void winetricksListIsParsed()

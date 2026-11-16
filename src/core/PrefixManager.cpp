@@ -652,6 +652,8 @@ bool PrefixManager::launch(const QString& name, const QStringList& wineArgs, con
         emit message(tr("Could not set up the bundled MangoHud in %1. Launching without it.")
                          .arg(LaunchSettings::mangohudDir()),
                      true);
+    if (game && p->settings.mangohud)
+        LaunchSettings::applyMangohudConfig(env);
     proc.setProcessEnvironment(env);
     if (!workDir.isEmpty())
         proc.setWorkingDirectory(workDir);

@@ -69,7 +69,7 @@ Cask/
 папку `MangoHud/pkg/usr/lib/mangohud/lib64/` как `Cask/data/mangohud/lib64/` (нужны `libMangoHud.so`,
 `libMangoHud_shim.so`, `libMangoHud_opengl.so`). Cask сам задаёт `MANGOHUD=1`, `LD_PRELOAD` (OpenGL) и слой
 Vulkan (манифест с путём к вашей копии создаётся в `data/mangohud/layer/`); скрипт `mangohud` не нужен.
-В системе должны быть `libxkbcommon` и `libwayland-client`. 32-битные игры не поддерживаются.
+Конфиг: положите `Cask/data/mangohud/MangoHud.conf` (пример в архиве: `usr/share/doc/mangohud/MangoHud.conf.example`), Cask укажет его через `MANGOHUD_CONFIGFILE` (и для системного mangohud тоже). Если эта переменная задана в своих переменных префикса, берётся она; `MANGOHUD_CONFIG` дополняет конфиг сверху. В системе должны быть `libxkbcommon` и `libwayland-client`. 32-битные игры не поддерживаются.
 
 Синхронизацию (ntsync и др.) Cask не настраивает: Wine 11 сам использует ntsync, если он доступен.
 Нужен другой режим для особой сборки: добавьте нужную переменную сами (например `WINEFSYNC=1`).
