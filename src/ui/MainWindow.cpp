@@ -219,7 +219,7 @@ void MainWindow::buildUi()
     form->addRow(tr("Wine"), m_runnerBox);
     v->addWidget(info);
 
-    // Components: "None" by default; selecting a version applies it, "None" removes it.
+    // Components: "Disabled" by default; selecting a version applies it, "Disabled" removes it.
     auto* comps = new QGroupBox(tr("Components"));
     auto* grid = new QGridLayout(comps);
     int row = 0;
@@ -265,12 +265,12 @@ void MainWindow::buildUi()
            "You can type your own value."));
     lf->addRow(tr("Wine language"), m_localeBox);
 
-    m_gamemode = new QCheckBox(tr("Use GameMode"));
+    m_gamemode = new QCheckBox(tr("GameMode"));
     m_gamemode->setToolTip(LaunchSettings::gamemodeBinary().isEmpty()
                                ? tr("gamemoderun was not found. Install the 'gamemode' package.")
                                : tr("Programs started with 'Run program…' are launched through gamemoderun."));
 
-    m_mangohud = new QCheckBox(tr("Use MangoHud"));
+    m_mangohud = new QCheckBox(tr("MangoHud"));
     m_mangohud->setToolTip(LaunchSettings::mangohudBinary().isEmpty() && !LaunchSettings::hasPortableMangohud()
                                ? tr("mangohud was not found. Install the 'mangohud' package or put its files into %1.")
                                      .arg(LaunchSettings::mangohudDir() + QStringLiteral("/lib64"))
@@ -486,7 +486,7 @@ void MainWindow::onSelected()
     for (CompRow& cr : m_rows) {
         const QStringList vers = Components::versions(cr.type);
         cr.versions->clear();
-        cr.versions->addItem(tr("None"), QString());
+        cr.versions->addItem(tr("Disabled"), QString());
         for (const QString& v : vers)
             cr.versions->addItem(v, v);
 
@@ -593,13 +593,14 @@ void MainWindow::deletePrefix()
     const QString name = currentName();
     if (name.isEmpty())
         return;
+    // Standard buttons (not custom ones), so they get the same icons as the other dialogs.
     QMessageBox box(QMessageBox::Question, QStringLiteral("Cask"),
                     tr("Delete prefix '%1' with all its data? This cannot be undone.").arg(name),
-                    QMessageBox::NoButton, this);
-    QPushButton* yes = box.addButton(tr("Yes"), QMessageBox::YesRole);
-    box.addButton(tr("No"), QMessageBox::NoRole);
-    box.exec();
-    if (box.clickedButton() != yes)
+                    QMessageBox::Yes | QMessageBox::No, this);
+    box.setDefaultButton(QMessageBox::No);
+    box.button(QMessageBox::Yes)->setText(tr("Yes"));
+    box.button(QMessageBox::No)->setText(tr("No"));
+    if (box.exec() != QMessageBox::Yes)
         return;
     QString err;
     if (!m_mgr.remove(name, &err))

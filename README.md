@@ -37,9 +37,9 @@ Cask/
 - Create (win64/win32, choice of Wine) and delete prefixes.
 - Change the Wine of an existing prefix by picking it in the list: the selected build is applied
   immediately (`wineboot -u`).
-- D7VK, DXVK and VKD3D-Proton work like in Bottles: each has its own list, "None" by default. Picking a
+- D7VK, DXVK and VKD3D-Proton work like in Bottles: each has its own list, "Disabled" by default. Picking a
   version applies it (DLLs are copied to `system32`/`syswow64`, originals are backed up as `*.cask-bak`,
-  DLL overrides are set through `regedit`); picking "None" removes the component and restores the originals.
+  DLL overrides are set through `regedit`); picking "Disabled" removes the component and restores the originals.
 - Run programs. Tools: Explorer, Control panel, winecfg, regedit, uninstaller, task manager, winetricks.
 - The prefix list can be reordered by drag and drop. The order is remembered in
   `prefixes/.cask-order.json` and moves together with the prefixes.

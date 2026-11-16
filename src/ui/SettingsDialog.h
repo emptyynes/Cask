@@ -44,6 +44,14 @@ public:
         form->addRow(tr("Prefixes folder"), row(m_prefixes));
         form->addRow(tr("Data folder"), row(m_data));
 
+        auto* hint = new QLabel(
+            tr("Paths inside the Cask folder are stored as relative, so the whole folder can be "
+               "moved. Existing prefixes are not moved automatically when the folder changes: "
+               "move them manually."));
+        hint->setWordWrap(true);
+        hint->setEnabled(false);  // dimmed text: it is a note, not an option
+        form->addRow(QString(), hint);
+
         m_desktop = new QCheckBox(tr("Integrate with the desktop"));
         m_desktop->setChecked(Config::instance().desktopIntegration());
         m_desktop->setToolTip(
@@ -51,13 +59,6 @@ public:
                "When turned off, these entries are removed.")
                 .arg(DesktopIntegration::desktopFileName(), DesktopIntegration::applicationsDir()));
         form->addRow(tr("Desktop"), m_desktop);
-
-        auto* hint = new QLabel(
-            tr("Paths inside the Cask folder are stored as relative, so the whole folder can be "
-               "moved. Existing prefixes are not moved automatically when the folder changes: "
-               "move them manually."));
-        hint->setWordWrap(true);
-        form->addRow(hint);
 
         auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
         buttons->button(QDialogButtonBox::Ok)->setText(tr("OK"));

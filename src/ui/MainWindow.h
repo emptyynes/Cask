@@ -41,7 +41,7 @@ private slots:
 
 private:
     // Component row: a "None / versions" list. Selecting a version applies it,
-    // selecting "None" removes the component.
+    // selecting "Disabled" removes the component.
     struct CompRow {
         QString type;
         QComboBox* versions = nullptr;
