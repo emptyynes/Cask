@@ -17,6 +17,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QVBoxLayout>
 
 class SettingsDialog : public QDialog {
     Q_OBJECT
@@ -25,7 +26,9 @@ public:
     {
         setWindowTitle(tr("Settings"));
         setMinimumWidth(560);
-        auto* form = new QFormLayout(this);
+        auto* top = new QVBoxLayout(this);
+        auto* form = new QFormLayout;
+        top->addLayout(form);
 
         m_lang = new QComboBox;
         m_lang->addItem(tr("System default"), QStringLiteral("system"));
@@ -49,7 +52,7 @@ public:
                "moved. Existing prefixes are not moved automatically when the folder changes: "
                "move them manually."));
         hint->setWordWrap(true);
-        form->addRow(hint);  // spans the whole width, in the normal text color
+        top->addWidget(hint);  // spans the whole width, in the normal text color
 
         m_desktop = new QCheckBox(tr("Integrate with the desktop"));
         m_desktop->setChecked(Config::instance().desktopIntegration());
@@ -57,7 +60,7 @@ public:
             tr("Creates %1 and adds Cask to the file associations of .exe, .msi, .bat and .lnk in %2. "
                "When turned off, these entries are removed.")
                 .arg(DesktopIntegration::desktopFileName(), DesktopIntegration::applicationsDir()));
-        form->addRow(tr("Desktop"), m_desktop);
+        top->addWidget(m_desktop);
 
         auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
         buttons->button(QDialogButtonBox::Ok)->setText(tr("OK"));
@@ -82,7 +85,12 @@ public:
             accept();
         });
         connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
-        form->addRow(buttons);
+        top->addWidget(buttons);
+
+        // A word-wrapped label makes the default size hint too tall; size the dialog for its real width.
+        layout()->activate();
+        const int w = qMax(sizeHint().width(), minimumWidth());
+        resize(w, layout()->totalHeightForWidth(w));
     }
 
     bool languageChanged() const { return m_languageChanged; }

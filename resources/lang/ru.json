@@ -88,7 +88,6 @@
   "There are no prefixes yet. Create one in the main Cask window.": "Префиксов пока нет. Создайте его в главном окне Cask.",
   "File not found: %1": "Файл не найден: %1",
   "Integrate with the desktop": "Интеграция с рабочим столом",
-  "Desktop": "Рабочий стол",
   "Creates %1 and adds Cask to the file associations of .exe, .msi, .bat and .lnk in %2. When turned off, these entries are removed.": "Создаёт %1 и добавляет Cask в сопоставления файлов .exe, .msi, .bat и .lnk в %2. При выключении эти записи удаляются.",
   "Cask root": "Корень Cask",
   "Prefixes folder": "Папка префиксов",
