@@ -39,13 +39,75 @@
 #include <QToolBar>
 #include <QToolButton>
 #include <QIcon>
+#include <QPainter>
+#include <QPixmap>
+#include <QPolygonF>
+#include <QtMath>
 #include <QUrl>
 #include <QVBoxLayout>
+
+namespace {
+
+// A plain monochrome "refresh" icon drawn in the current button text color, so it follows any theme.
+class RefreshButton : public QToolButton {
+public:
+    explicit RefreshButton(QWidget* parent = nullptr) : QToolButton(parent)
+    {
+        setAutoRaise(true);
+        updateIcon();
+    }
+
+protected:
+    void changeEvent(QEvent* e) override
+    {
+        QToolButton::changeEvent(e);
+        if (e->type() == QEvent::PaletteChange)
+            updateIcon();
+    }
+
+private:
+    void updateIcon()
+    {
+        const qreal dpr = devicePixelRatioF();
+        const int size = 16;
+        QIcon icon;
+        for (const QIcon::Mode mode : {QIcon::Normal, QIcon::Disabled}) {
+            const QColor color = palette().color(mode == QIcon::Normal ? QPalette::Active : QPalette::Disabled,
+                                                 QPalette::ButtonText);
+            QPixmap pm(QSize(size, size) * dpr);
+            pm.setDevicePixelRatio(dpr);
+            pm.fill(Qt::transparent);
+            QPainter p(&pm);
+            p.setRenderHint(QPainter::Antialiasing);
+
+            // An almost full circle (gap on the right) with an arrow head at its end.
+            const QPointF c(size / 2.0, size / 2.0);
+            const qreal r = 5.0;
+            p.setPen(QPen(color, 1.5, Qt::SolidLine, Qt::RoundCap));
+            p.setBrush(Qt::NoBrush);
+            p.drawArc(QRectF(c.x() - r, c.y() - r, 2 * r, 2 * r), 50 * 16, 280 * 16);
+
+            const qreal a = qDegreesToRadians(330.0);  // where the arc ends
+            const QPointF end(c.x() + r * qCos(a), c.y() - r * qSin(a));
+            const QPointF t(-qSin(a), -qCos(a));       // direction of travel (screen coordinates)
+            const QPointF n(-t.y(), t.x());
+            QPolygonF head;
+            head << end + t * 3.0 << end - t * 0.5 + n * 2.8 << end - t * 0.5 - n * 2.8;
+            p.setPen(Qt::NoPen);
+            p.setBrush(color);
+            p.drawPolygon(head);
+            p.end();
+            icon.addPixmap(pm, mode);
+        }
+        setIcon(icon);
+    }
+};
+
+}  // namespace
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 {
     setWindowTitle(QStringLiteral("Cask"));
-    resize(1020, 760);
 
     m_busy = new QProgressBar;
     m_busy->setRange(0, 0);
@@ -110,9 +172,7 @@ void MainWindow::buildUi()
     listTitle->setFont(titleFont);
 
     // Refresh is a small icon button aligned to the right edge of the list.
-    auto* refreshBtn = new QToolButton;
-    refreshBtn->setAutoRaise(true);
-    refreshBtn->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh"), style()->standardIcon(QStyle::SP_BrowserReload)));
+    auto* refreshBtn = new RefreshButton;
     refreshBtn->setToolTip(tr("Refresh"));
     connect(refreshBtn, &QToolButton::clicked, this, &MainWindow::refresh);
     auto* head = new QHBoxLayout;
@@ -170,9 +230,11 @@ void MainWindow::buildUi()
         cr.hint = new QLabel;
         cr.hint->setEnabled(false);  // dimmed color
         cr.hint->setWordWrap(true);
-        grid->addWidget(new QLabel(t.title), row, 0);
-        grid->addWidget(cr.versions, row, 1);
-        grid->addWidget(cr.hint, row, 2);
+        cr.hint->hide();  // shown only when there is something to say
+        cr.versions->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        grid->addWidget(new QLabel(t.title), row * 2, 0);
+        grid->addWidget(cr.versions, row * 2, 1);
+        grid->addWidget(cr.hint, row * 2 + 1, 1);
         const QString type = t.id;
         // activated fires only on user actions, not while the list is being filled.
         // Defer the handler so the list is not rebuilt inside its own signal.
@@ -182,8 +244,7 @@ void MainWindow::buildUi()
         m_rows.append(cr);
         ++row;
     }
-    grid->setColumnStretch(1, 2);
-    grid->setColumnStretch(2, 3);
+    grid->setColumnStretch(1, 1);
     v->addWidget(comps);
 
     // Launch settings
@@ -208,7 +269,6 @@ void MainWindow::buildUi()
     m_gamemode->setToolTip(LaunchSettings::gamemodeBinary().isEmpty()
                                ? tr("gamemoderun was not found. Install the 'gamemode' package.")
                                : tr("Programs started with 'Run program…' are launched through gamemoderun."));
-    lf->addRow(tr("Performance"), m_gamemode);
 
     m_mangohud = new QCheckBox(tr("Use MangoHud"));
     m_mangohud->setToolTip(LaunchSettings::mangohudBinary().isEmpty() && !LaunchSettings::hasPortableMangohud()
@@ -216,7 +276,11 @@ void MainWindow::buildUi()
                                      .arg(LaunchSettings::mangohudDir() + QStringLiteral("/lib64"))
                                : tr("Programs started with 'Run program…' are launched through mangohud. "
                                     "Configure it with MANGOHUD_CONFIG in the environment variables."));
-    lf->addRow(tr("Overlay"), m_mangohud);
+    auto* wrappers = new QHBoxLayout;
+    wrappers->addWidget(m_gamemode);
+    wrappers->addWidget(m_mangohud);
+    wrappers->addStretch(1);
+    lf->addRow(wrappers);
 
     m_envBtn = new QPushButton;
     lf->addRow(tr("Environment"), m_envBtn);
@@ -267,6 +331,7 @@ void MainWindow::buildUi()
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setWidget(m_details);
     m_central->addWidget(scroll);
     m_central->setStretchFactor(0, 0);
@@ -274,6 +339,30 @@ void MainWindow::buildUi()
     m_central->setSizes({270, 750});
     setCentralWidget(m_central);
     m_central->setEnabled(!m_mgr.isBusy());
+    fitToContent();
+}
+
+// The window may not become smaller than what the details panel needs (nothing is cut off or
+// hidden behind a scroll bar) and starts at the size that exactly fits it.
+void MainWindow::fitToContent()
+{
+    const int leftMin = 230;
+    const int handle = m_central->handleWidth();
+    const QSize detailsMin = m_details->minimumSizeHint();
+    const QSize detailsWanted = m_details->sizeHint().expandedTo(detailsMin);
+
+    m_central->widget(1)->setMinimumSize(detailsMin);
+    const QSize centralMin(leftMin + handle + detailsMin.width(), detailsMin.height());
+    m_central->setMinimumSize(centralMin);
+
+    layout()->activate();
+    const QSize chrome = minimumSizeHint() - centralMin;  // tool bar, status bar, frame
+    const QSize wanted = chrome + QSize(leftMin + 40 + handle + detailsWanted.width(), detailsWanted.height());
+    if (!m_sized) {  // later calls keep the size and splitter position the user has chosen
+        m_central->setSizes({leftMin + 40, detailsWanted.width()});
+        resize(wanted.expandedTo(minimumSizeHint()));
+        m_sized = true;
+    }
 }
 
 void MainWindow::retranslate()
@@ -368,6 +457,7 @@ void MainWindow::onSelected()
         for (CompRow& cr : m_rows) {
             cr.versions->clear();
             cr.hint->clear();
+            cr.hint->hide();
         }
         m_loading = true;
         m_env.clear();
@@ -414,7 +504,10 @@ void MainWindow::onSelected()
         cr.hint->setText(vers.isEmpty()
                              ? tr("Put version folders into %1").arg(Config::instance().componentsDir(cr.type))
                              : QString());
+        cr.hint->setVisible(vers.isEmpty());
     }
+    m_details->layout()->invalidate();
+    fitToContent();  // a hint line may have appeared or disappeared
 
     m_loading = true;
     setLocaleValue(p.settings.locale);

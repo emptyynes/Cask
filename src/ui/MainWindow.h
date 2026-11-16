@@ -49,6 +49,7 @@ private:
     };
 
     void buildUi();
+    void fitToContent();
     void retranslate();  // rebuilds the UI after a language change
     void runTool(const QStringList& wineArgs);
     void componentChosen(const QString& type);
@@ -79,4 +80,5 @@ private:
     bool m_loading = false;  // true while widgets are being filled from the prefix (do not save)
 
     QProgressBar* m_busy = nullptr;
+    bool m_sized = false;  // the initial size has been set
 };
