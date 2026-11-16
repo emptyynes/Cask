@@ -626,14 +626,19 @@ bool PrefixManager::launch(const QString& name, const QStringList& wineArgs, con
                             "Launching without it."),
                          true);
     }
+    bool portableHud = false;
     if (game && p->settings.mangohud) {
-        const QString mh = LaunchSettings::mangohudBinary();
-        if (!mh.isEmpty())
-            chain << mh;
-        else
-            emit message(tr("MangoHud is enabled for this prefix, but mangohud was not found. "
-                            "Launching without it."),
-                         true);
+        if (LaunchSettings::hasPortableMangohud()) {
+            portableHud = true;  // окружение добавляется ниже, обёртка не нужна
+        } else {
+            const QString mh = LaunchSettings::mangohudBinary();
+            if (!mh.isEmpty())
+                chain << mh;
+            else
+                emit message(tr("MangoHud is enabled for this prefix, but mangohud was not found. "
+                                "Launching without it."),
+                             true);
+        }
     }
     chain << r->wine;
     const QString program = chain.takeFirst();
@@ -642,7 +647,12 @@ bool PrefixManager::launch(const QString& name, const QStringList& wineArgs, con
     QProcess proc;
     proc.setProgram(program);
     proc.setArguments(args);
-    proc.setProcessEnvironment(makeEnv(*p, *r, true));
+    QProcessEnvironment env = makeEnv(*p, *r, true);
+    if (portableHud && !LaunchSettings::applyPortableMangohud(env))
+        emit message(tr("Could not set up the bundled MangoHud in %1. Launching without it.")
+                         .arg(LaunchSettings::mangohudDir()),
+                     true);
+    proc.setProcessEnvironment(env);
     if (!workDir.isEmpty())
         proc.setWorkingDirectory(workDir);
     if (!proc.startDetached()) {

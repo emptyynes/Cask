@@ -9,6 +9,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QProcess>
 #include <QSet>
 #include <QTemporaryDir>
@@ -270,6 +272,36 @@ private slots:
 
         b.kill();
         b.waitForFinished(3000);
+    }
+
+    // ---- портативный MangoHud ----
+
+    void portableMangohud()
+    {
+        const QString lib = LaunchSettings::mangohudDir() + "/lib64";
+        QDir().mkpath(lib);
+        QProcessEnvironment env;
+        QVERIFY(!LaunchSettings::hasPortableMangohud());
+        QVERIFY(!LaunchSettings::applyPortableMangohud(env));
+        QVERIFY(!env.contains("MANGOHUD"));
+
+        writeFile(lib + "/libMangoHud.so", "x");
+        writeFile(lib + "/libMangoHud_shim.so", "x");
+        QVERIFY(LaunchSettings::hasPortableMangohud());
+
+        env.insert("LD_PRELOAD", "/other.so");
+        QVERIFY(LaunchSettings::applyPortableMangohud(env));
+        QVERIFY(LaunchSettings::applyPortableMangohud(env));  // повторный вызов не дублирует
+        QCOMPARE(env.value("MANGOHUD"), QString("1"));
+        QCOMPARE(env.value("LD_PRELOAD"), QString("/other.so:") + lib + "/libMangoHud_shim.so");
+
+        const QString layer = LaunchSettings::mangohudDir() + "/layer";
+        QCOMPARE(env.value("VK_ADD_IMPLICIT_LAYER_PATH"), layer);  // без дублей после повторного вызова
+        QFile f(layer + "/MangoHud.x86_64.json");
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const auto doc = QJsonDocument::fromJson(f.readAll());
+        QVERIFY(!doc.isNull());
+        QCOMPARE(doc.object()["layer"].toObject()["library_path"].toString(), lib + "/libMangoHud.so");
     }
 
     // ---- winetricks ----

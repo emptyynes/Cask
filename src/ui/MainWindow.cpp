@@ -185,8 +185,9 @@ void MainWindow::buildUi()
     lf->addRow(tr("Performance"), m_gamemode);
 
     m_mangohud = new QCheckBox(tr("Use MangoHud"));
-    m_mangohud->setToolTip(LaunchSettings::mangohudBinary().isEmpty()
-                               ? tr("mangohud was not found. Install the 'mangohud' package.")
+    m_mangohud->setToolTip(LaunchSettings::mangohudBinary().isEmpty() && !LaunchSettings::hasPortableMangohud()
+                               ? tr("mangohud was not found. Install the 'mangohud' package or put its files into %1.")
+                                     .arg(LaunchSettings::mangohudDir() + QStringLiteral("/lib64"))
                                : tr("Programs started with 'Run program…' are launched through mangohud. "
                                     "Configure it with MANGOHUD_CONFIG in the environment variables."));
     lf->addRow(tr("Overlay"), m_mangohud);

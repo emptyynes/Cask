@@ -36,4 +36,11 @@ void applyLocale(QProcessEnvironment& env, const QString& locale);
 QString gamemodeBinary();    // путь к gamemoderun или пусто
 QString mangohudBinary();    // путь к mangohud или пусто
 
+// Портативный MangoHud (только 64 бит): data/mangohud/lib64/libMangoHud{,_shim,_opengl}.so
+QString mangohudDir();       // <data>/mangohud
+bool hasPortableMangohud();  // есть ли data/mangohud/lib64/libMangoHud_shim.so и libMangoHud.so
+// Добавляет в env: MANGOHUD=1, LD_PRELOAD с shim (для OpenGL) и путь к слою Vulkan
+// (слой с абсолютным путём к библиотеке создаётся в <data>/mangohud/layer при каждом вызове).
+bool applyPortableMangohud(QProcessEnvironment& env);
+
 }  // namespace LaunchSettings

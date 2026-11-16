@@ -52,6 +52,7 @@ set(CASK_LAYOUT_DIRS
     data/d7vk
     data/vkd3d-proton
     data/winetricks
+    data/mangohud
     prefixes
 )
 
