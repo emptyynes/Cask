@@ -664,6 +664,13 @@ bool PrefixManager::launch(const QString& name, const QStringList& wineArgs, con
     return true;
 }
 
+QStringList PrefixManager::programArgs(const QString& file)
+{
+    return QFileInfo(file).suffix().compare(QStringLiteral("exe"), Qt::CaseInsensitive) == 0
+               ? QStringList{file}
+               : QStringList{QStringLiteral("start"), QStringLiteral("/unix"), file};
+}
+
 bool PrefixManager::setSettings(const QString& name, const PrefixSettings& in, QString* err)
 {
     auto p = find(name);

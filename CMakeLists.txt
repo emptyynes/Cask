@@ -32,6 +32,7 @@ add_executable(cask
     src/ui/SettingsDialog.h
     src/ui/EnvDialog.h
     src/ui/WinetricksDialog.h
+    src/ui/PrefixPickerDialog.h
 )
 
 target_include_directories(cask PRIVATE src)

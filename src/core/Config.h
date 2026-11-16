@@ -39,6 +39,10 @@ public:
     bool desktopIntegration() const;
     void setDesktopIntegration(bool on);
 
+    // Последний префикс, выбранный при запуске файла (предлагается первым).
+    QString lastPrefix() const;
+    void setLastPrefix(const QString& name);
+
     void ensureLayout() const;
 
 private:

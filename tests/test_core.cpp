@@ -275,6 +275,14 @@ private slots:
         b.waitForFinished(3000);
     }
 
+    void programArgsByExtension()
+    {
+        QCOMPARE(PrefixManager::programArgs("/g/Setup.EXE"), QStringList{"/g/Setup.EXE"});
+        QCOMPARE(PrefixManager::programArgs("/g/a.msi"), (QStringList{"start", "/unix", "/g/a.msi"}));
+        QCOMPARE(PrefixManager::programArgs("/g/a.lnk"), (QStringList{"start", "/unix", "/g/a.lnk"}));
+        QCOMPARE(PrefixManager::programArgs("/g/a.bat"), (QStringList{"start", "/unix", "/g/a.bat"}));
+    }
+
     // ---- интеграция с рабочим столом ----
 
     void mimeCacheAddAndRemoveKeepsForeignLines()

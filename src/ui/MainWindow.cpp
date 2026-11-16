@@ -509,11 +509,8 @@ void MainWindow::runExe()
     if (file.isEmpty())
         return;
     const QFileInfo fi(file);
-    const QStringList args = fi.suffix().compare("exe", Qt::CaseInsensitive) == 0
-                                 ? QStringList{file}
-                                 : QStringList{"start", "/unix", file};
     QString err;
-    if (!m_mgr.launch(name, args, fi.absolutePath(), &err, true))
+    if (!m_mgr.launch(name, PrefixManager::programArgs(file), fi.absolutePath(), &err, true))
         QMessageBox::warning(this, QStringLiteral("Cask"), err);
 }
 

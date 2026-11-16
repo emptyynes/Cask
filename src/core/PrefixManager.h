@@ -52,6 +52,9 @@ public:
     bool launch(const QString& name, const QStringList& wineArgs, const QString& workDir, QString* err,
                 bool game = false);
 
+    // Аргументы wine для запуска файла: .exe напрямую, остальное (.msi, .bat, .lnk) через `start /unix`.
+    static QStringList programArgs(const QString& file);
+
     // Сохраняет настройки запуска префикса (переменные, синхронизация, язык, GameMode).
     bool setSettings(const QString& name, const PrefixSettings& settings, QString* err);
 
