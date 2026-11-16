@@ -49,8 +49,7 @@ public:
                "moved. Existing prefixes are not moved automatically when the folder changes: "
                "move them manually."));
         hint->setWordWrap(true);
-        hint->setEnabled(false);  // dimmed text: it is a note, not an option
-        form->addRow(QString(), hint);
+        form->addRow(hint);  // spans the whole width, in the normal text color
 
         m_desktop = new QCheckBox(tr("Integrate with the desktop"));
         m_desktop->setChecked(Config::instance().desktopIntegration());
