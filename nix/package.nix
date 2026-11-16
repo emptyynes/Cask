@@ -1,0 +1,184 @@
+# Cask package (derivation).
+#
+# Cask is a portable application: it keeps its settings, Wine builds and prefixes in a "root" folder.
+# The Nix store is read-only, so the installed `cask` command is a small launcher that points the
+# root (CASK_ROOT) at a writable directory in the user's home (see `dataDir`) and then starts
+# the Qt-wrapped binary. The C++ sources are not touched.
+#
+# Standalone use (without the flake):
+#   cask = pkgs.callPackage ./package.nix { src = <path or fetchFromGitHub of the Cask sources>; };
+{
+  lib,
+  stdenv,
+  cmake,
+  ninja,
+  qt6,
+  writeText,
+  runtimeShell,
+  makeDesktopItem,
+  copyDesktopItems,
+  buildFHSEnv,
+  # Tools Cask runs: winetricks and what it needs to unpack/download, GameMode and MangoHud.
+  winetricks,
+  cabextract,
+  unzip,
+  p7zip,
+  curl,
+  gamemode,
+  mangohud,
+
+  # Sources: only what the build needs, so editing docs or Nix files does not rebuild Cask.
+  src ? lib.fileset.toSource {
+    root = ../.;
+    fileset = lib.fileset.unions [
+      ../CMakeLists.txt
+      ../src
+      ../resources
+    ];
+  },
+
+  # Where Cask keeps everything (CASK_ROOT: cask.ini, data/, prefixes/). A shell expression:
+  # it may use $HOME or $XDG_DATA_HOME. An existing CASK_ROOT in the environment always wins.
+  dataDir ? "\${XDG_DATA_HOME:-$HOME/.local/share}/cask",
+
+  # A Wine package that is put first on Cask's PATH (appears as "System Wine"), e.g. pkgs.wineWowPackages.staging.
+  wine ? null,
+
+  # Tools on Cask's PATH, and any extra ones.
+  runtimePackages ? [
+    winetricks
+    cabextract
+    unzip
+    p7zip
+    curl
+    gamemode
+    mangohud
+  ],
+  extraPackages ? [ ],
+}:
+
+let
+  mimeTypes = [
+    "application/x-ms-dos-executable"
+    "application/vnd.microsoft.portable-executable"
+    "application/x-msdownload"
+    "application/x-msi"
+    "application/x-ms-shortcut"
+    "application/x-bat"
+  ];
+
+  # `bin/cask`: sets the root and starts the wrapped binary. The Nix parts are expanded when the
+  # package is built, the shell parts (written with ''${ ) when the user runs it.
+  launcher = writeText "cask-launcher" ''
+    #!@shell@
+    export CASK_ROOT="''${CASK_ROOT:-@root@}"
+    exec @out@/libexec/cask/cask "$@"
+  '';
+in
+stdenv.mkDerivation (finalAttrs: {
+  pname = "cask";
+  version = "0.1.0";
+
+  inherit src;
+
+  nativeBuildInputs = [
+    cmake
+    ninja
+    qt6.wrapQtAppsHook
+    copyDesktopItems
+  ];
+
+  buildInputs = [ qt6.qtbase ] ++ lib.optional stdenv.hostPlatform.isLinux qt6.qtwayland;
+
+  # We install by hand: the project's own install rules are meant for the portable folder layout.
+  dontWrapQtApps = true;
+
+  installPhase = ''
+    runHook preInstall
+
+    install -Dm755 Cask/cask $out/libexec/cask/cask
+
+    mkdir -p $out/bin
+    substitute ${launcher} $out/bin/cask \
+      --subst-var-by shell ${runtimeShell} \
+      --subst-var-by root '${dataDir}' \
+      --subst-var out
+    chmod +x $out/bin/cask
+
+    runHook postInstall
+  '';
+
+  postFixup = ''
+    wrapQtApp $out/libexec/cask/cask \
+      --prefix PATH : ${lib.makeBinPath (lib.optional (wine != null) wine ++ runtimePackages ++ extraPackages)}
+  '';
+
+  desktopItems = [
+    (makeDesktopItem {
+      name = "cask";
+      desktopName = "Cask";
+      genericName = "Wine prefix manager";
+      comment = "Manage Wine prefixes";
+      exec = "cask %f";
+      icon = "wine";
+      categories = [ "Utility" ];
+      mimeTypes = mimeTypes;
+      startupNotify = true;
+    })
+  ];
+
+  passthru = {
+    inherit mimeTypes;
+
+    # Cask inside an FHS environment (like steam-run). Needed for Wine/Proton builds that you
+    # download and put into Cask's data/runners: such generic Linux binaries do not run on NixOS
+    # otherwise. Not needed when you use a Wine from nixpkgs (the `wine` argument).
+    fhs = buildFHSEnv {
+      name = "cask";
+      targetPkgs = _: [ finalAttrs.finalPackage ];
+      multiPkgs =
+        pkgs:
+        let
+          # nixpkgs is moving the X11 libraries out of `xorg`; accept both spellings.
+          x = new: old: pkgs.${new} or pkgs.xorg.${old};
+        in
+        with pkgs;
+        [
+          alsa-lib
+          fontconfig
+          freetype
+          gnutls
+          libGL
+          libpulseaudio
+          libusb1
+          libxkbcommon
+          openal
+          sdl3
+          vulkan-loader
+          (x "libx11" "libX11")
+          (x "libxcomposite" "libXcomposite")
+          (x "libxcursor" "libXcursor")
+          (x "libxext" "libXext")
+          (x "libxi" "libXi")
+          (x "libxinerama" "libXinerama")
+          (x "libxrandr" "libXrandr")
+          (x "libxrender" "libXrender")
+          (x "libxxf86vm" "libXxf86vm")
+        ];
+      runScript = "cask";
+      profile = ''
+        export LD_LIBRARY_PATH=/run/opengl-driver/lib:/run/opengl-driver-32/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+      '';
+      extraInstallCommands = ''
+        mkdir -p $out/share
+        ln -s ${finalAttrs.finalPackage}/share/applications $out/share/applications
+      '';
+    };
+  };
+
+  meta = {
+    description = "Wine prefix manager written in C++/Qt";
+    mainProgram = "cask";
+    platforms = lib.platforms.linux;
+  };
+})

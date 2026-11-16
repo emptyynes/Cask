@@ -7,3 +7,6 @@ CMakeLists.txt.user
 CMakeUserPresets.json
 Cask-src.zip
 *.tar.gz
+result
+result-*
+.cask-dev/
