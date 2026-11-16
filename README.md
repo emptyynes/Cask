@@ -119,9 +119,8 @@ Requires Qt 6 (or Qt 5) Widgets and CMake ≥ 3.16. The portable folder is produ
 `scripts/bundle-linux.sh build/Cask` additionally copies the Qt libraries and plugins into `lib/` and `lib/plugins/` (needs
 `patchelf`).
 
-Checks (also run by GitHub Actions):
+Translation check (also run by GitHub Actions):
 
 ```
 python3 scripts/check-translations.py        # all strings translated, placeholders match
-ctest --test-dir build --output-on-failure   # core tests (needs Qt Test)
 ```

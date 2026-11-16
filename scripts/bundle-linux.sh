@@ -48,14 +48,19 @@ done
 patchelf --set-rpath '$ORIGIN/lib' "$BIN"
 for f in "$LIB"/*.so*; do patchelf --set-rpath '$ORIGIN' "$f"; done
 for f in "$PLUG"/platforms/*.so "$PLUG"/xcbglintegrations/*.so; do
-  [ -f "$f" ] && patchelf --set-rpath '$ORIGIN/../../lib' "$f"
+  [ -f "$f" ] && patchelf --set-rpath '$ORIGIN/../..' "$f"
 done
 
 # No qt.conf: the binary adds lib/plugins to the Qt library path itself (see src/main.cpp).
 
-if ldd "$BIN" | grep -q 'not found'; then
-  echo "Unresolved libraries:" >&2
-  ldd "$BIN" | grep 'not found' >&2
-  exit 1
-fi
+# Every binary we ship must resolve all its libraries, including the Qt plugins
+# (an unresolved plugin dependency only shows up at run time as "could not load the platform plugin").
+for f in "$BIN" "$PLUG"/platforms/*.so "$PLUG"/xcbglintegrations/*.so; do
+  [ -f "$f" ] || continue
+  if ldd "$f" | grep -q 'not found'; then
+    echo "Unresolved libraries in $f:" >&2
+    ldd "$f" | grep 'not found' >&2
+    exit 1
+  fi
+done
 echo "Bundled $(ls "$LIB" | wc -l) libraries into $LIB"

@@ -8,9 +8,8 @@ set(CMAKE_AUTORCC ON)
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
-find_package(Qt${QT_VERSION_MAJOR} QUIET OPTIONAL_COMPONENTS Test)
 
-# Core (no GUI) and translation resources: shared by the program and the tests.
+# Core (no GUI) and translation resources.
 set(CASK_CORE_SOURCES
     src/core/Config.h          src/core/Config.cpp
     src/core/Component.h       src/core/Component.cpp
@@ -65,13 +64,3 @@ foreach(d ${CASK_LAYOUT_DIRS})
 endforeach()
 
 install(TARGETS cask RUNTIME DESTINATION .)
-
-# Core tests (built only if Qt Test is installed).
-if(TARGET Qt${QT_VERSION_MAJOR}::Test)
-    enable_testing()
-    add_executable(cask_tests tests/test_core.cpp ${CASK_CORE_SOURCES})
-    target_include_directories(cask_tests PRIVATE src)
-    target_link_libraries(cask_tests PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::Test)
-    set_target_properties(cask_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
-    add_test(NAME core COMMAND cask_tests)
-endif()

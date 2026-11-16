@@ -15,10 +15,11 @@
 int main(int argc, char* argv[])
 {
     // Bundled Qt plugins live in lib/plugins next to the binary, so no qt.conf is needed in the root.
+    // They replace the system plugin paths: plugins built for another Qt version are rejected anyway.
     // Must happen before QApplication is created. Uses /proc/self/exe because there is no app object yet.
     const QString exeDir = QFileInfo(QFileInfo(QStringLiteral("/proc/self/exe")).symLinkTarget()).absolutePath();
     if (QFileInfo(exeDir + QStringLiteral("/lib/plugins")).isDir())
-        QCoreApplication::addLibraryPath(exeDir + QStringLiteral("/lib/plugins"));
+        QCoreApplication::setLibraryPaths({exeDir + QStringLiteral("/lib/plugins")});
 
     QApplication app(argc, argv);
     app.setApplicationName("Cask");

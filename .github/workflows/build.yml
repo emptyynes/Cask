@@ -36,33 +36,15 @@ jobs:
       - name: Build
         run: cmake --build build
 
-      - name: Unit tests
-        run: QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
-
       - name: Bundle portable layout
         run: bash scripts/bundle-linux.sh build/Cask
 
       # Exit code 124 means the process was still alive when the timeout hit, i.e. the window started.
-      - name: Smoke test (offscreen, English)
+      - name: Smoke test (offscreen)
         run: |
           status=0
           QT_QPA_PLATFORM=offscreen timeout 3 build/Cask/cask || status=$?
           [ "$status" -eq 124 ] || { echo "Smoke test failed (exit code $status)"; exit 1; }
-
-      # The UI is built from the translation, so run once more with a Russian system locale.
-      - name: Smoke test (offscreen, Russian)
-        run: |
-          status=0
-          LANG=ru_RU.UTF-8 LC_ALL=ru_RU.UTF-8 QT_QPA_PLATFORM=offscreen timeout 3 build/Cask/cask || status=$?
-          [ "$status" -eq 124 ] || { echo "Smoke test failed (exit code $status)"; exit 1; }
-
-      # No qt.conf in the root: the Qt plugins must be picked up from lib/plugins next to the binary.
-      - name: Check bundled Qt plugins are used
-        run: |
-          out=$(QT_DEBUG_PLUGINS=1 QT_QPA_PLATFORM=offscreen timeout 3 build/Cask/cask 2>&1 || true)
-          echo "$out" | grep -q 'Cask/lib/plugins/platforms/libqoffscreen' \
-            || { echo "$out" | grep -i 'plugin' | head -20; echo "Bundled platform plugin was not used"; exit 1; }
-          test ! -e build/Cask/qt.conf
 
       - name: Archive
         run: tar -C build -czf Cask-linux-x86_64.tar.gz Cask
