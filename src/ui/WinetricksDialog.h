@@ -254,6 +254,7 @@ private:
     {
         const QString text = m_search->text().trimmed().toLower();
         const QString cat = m_category->currentData().toString();
+        m_tree->setUpdatesEnabled(false);  // ~1500 rows: avoid relayout after every hidden row
         for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
             QTreeWidgetItem* it = m_tree->topLevelItem(i);
             const bool catOk = cat.isEmpty() || it->data(0, Qt::UserRole + 1).toString() == cat;
@@ -261,6 +262,7 @@ private:
                                 it->text(1).toLower().contains(text);
             it->setHidden(!(catOk && textOk));
         }
+        m_tree->setUpdatesEnabled(true);
     }
 
     QStringList checkedVerbs() const

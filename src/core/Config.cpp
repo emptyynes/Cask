@@ -55,6 +55,7 @@ bool Config::desktopIntegration() const
 void Config::setDesktopIntegration(bool on)
 {
     m_settings->setValue("desktop/integration", on);
+    m_settings->sync();
 }
 
 QString Config::lastPrefix() const
@@ -65,6 +66,7 @@ QString Config::lastPrefix() const
 void Config::setLastPrefix(const QString& name)
 {
     m_settings->setValue("ui/lastPrefix", name);
+    m_settings->sync();
 }
 
 void Config::setLanguage(const QString& code)

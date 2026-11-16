@@ -71,6 +71,7 @@ signals:
     void message(const QString& text, bool ok);
 
 private:
+    bool checkIdle(QString* err) const;  // false (with an error) while a background job runs
     int stopProcesses(const Prefix& p);  // возвращает, сколько процессов работало до остановки
     void startJob(const Prefix& p, const Runner& r, const QStringList& args, const QProcessEnvironment& env,
                   const QString& okMsg, std::function<void(bool)> after = {}, const QString& workDir = {});

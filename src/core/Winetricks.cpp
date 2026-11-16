@@ -92,11 +92,12 @@ QList<Verb> parseList(const QByteArray& output)
 
 QSet<QString> parseInstalled(const QByteArray& output, const QSet<QString>& known)
 {
+    static const QRegularExpression whitespace(QStringLiteral("\\s+"));
     QSet<QString> out;
     const QList<QByteArray> lines = output.split('\n');
     for (const QByteArray& raw : lines) {
         const QString line = QString::fromLocal8Bit(raw).trimmed();
-        const QString name = line.section(QRegularExpression(QStringLiteral("\\s+")), 0, 0);
+        const QString name = line.section(whitespace, 0, 0);
         if (known.contains(name))
             out.insert(name);
     }

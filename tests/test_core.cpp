@@ -14,6 +14,7 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QSet>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -252,11 +253,16 @@ private slots:
         const QString pathA = makePrefix("kill_a").path;
         const QString pathB = makePrefix("kill_b").path;
 
-        auto startSleep = [](QProcess& proc, const QString& prefix) {
+        // Only processes whose executable name starts with "wine" are stopped, so use a renamed copy of sleep.
+        const QString fakeWine = m_dir.path() + "/wine-sleep";
+        QVERIFY(QFile::copy(QStandardPaths::findExecutable("sleep"), fakeWine));
+        QVERIFY(QFile::setPermissions(fakeWine, QFile::permissions(fakeWine) | QFile::ExeOwner));
+
+        auto startSleep = [&fakeWine](QProcess& proc, const QString& prefix) {
             QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
             env.insert("WINEPREFIX", prefix);
             proc.setProcessEnvironment(env);
-            proc.start("sleep", {"60"});
+            proc.start(fakeWine, {"60"});
             return proc.waitForStarted(3000);
         };
         QProcess a, b;
@@ -273,6 +279,23 @@ private slots:
 
         b.kill();
         b.waitForFinished(3000);
+    }
+
+    void shellWithWineprefixIsNotKilled()
+    {
+        // A shell/terminal that only has WINEPREFIX exported must survive "stop all processes".
+        const QString path = makePrefix("kill_shell").path;
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert("WINEPREFIX", path);
+        QProcess sh;
+        sh.setProcessEnvironment(env);
+        sh.start("sleep", {"60"});
+        QVERIFY(sh.waitForStarted(3000));
+        QVERIFY(!PrefixManager::processes(path).contains(sh.processId()));
+        QCOMPARE(PrefixManager::killProcesses(path), 0);
+        QCOMPARE(sh.state(), QProcess::Running);
+        sh.kill();
+        sh.waitForFinished(3000);
     }
 
     void programArgsByExtension()

@@ -11,6 +11,7 @@
 
 #include <QAbstractItemModel>
 #include <QAction>
+#include <QCloseEvent>
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -64,6 +65,17 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     });
 
     refresh();
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    // Closing in the middle of wineboot/regedit would kill it and leave a half-initialized prefix.
+    if (m_mgr.isBusy()) {
+        statusBar()->showMessage(tr("Wait for the current operation to finish."), 5000);
+        event->ignore();
+        return;
+    }
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::buildUi()

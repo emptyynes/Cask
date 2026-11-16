@@ -12,6 +12,7 @@
 #include <QJsonDocument>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QSaveFile>
 #include <QSet>
 #include <QStandardPaths>
 #include <QThread>
@@ -48,6 +49,8 @@ bool removeTree(const QString& path)
     if (fi.isSymLink() || !fi.isDir())
         return QFile::remove(path);
     bool ok = true;
+    // Games sometimes leave read-only directories behind; they cannot be emptied otherwise.
+    QFile::setPermissions(path, QFile::permissions(path) | QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
     const QDir d(path);
     const auto entries = d.entryInfoList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot);
     for (const QFileInfo& e : entries)
@@ -92,11 +95,9 @@ QStringList PrefixManager::order() const
 
 bool PrefixManager::setOrder(const QStringList& names)
 {
-    QFile f(Config::instance().prefixesDir() + "/.cask-order.json");
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-        return false;
-    f.write(QJsonDocument(QJsonArray::fromStringList(names)).toJson(QJsonDocument::Indented));
-    return true;
+    const QByteArray data = QJsonDocument(QJsonArray::fromStringList(names)).toJson(QJsonDocument::Indented);
+    QSaveFile f(Config::instance().prefixesDir() + "/.cask-order.json");
+    return f.open(QIODevice::WriteOnly) && f.write(data) == data.size() && f.commit();
 }
 
 int PrefixManager::unlinkUserDirs(const QString& prefixPath)
@@ -140,6 +141,14 @@ QString PrefixManager::wineserverPath(const Runner& r)
     return found.isEmpty() ? QStringLiteral("wineserver") : found;
 }
 
+// True if the process executable is a Wine binary (wine, wine64, wine-preloader, wineserver...).
+// Only such processes are killed: a shell or terminal that merely has WINEPREFIX exported must survive.
+static bool isWineProcess(qint64 pid)
+{
+    const QString exe = QFileInfo(QStringLiteral("/proc/%1/exe").arg(pid)).symLinkTarget();
+    return QFileInfo(exe).fileName().startsWith(QLatin1String("wine"), Qt::CaseInsensitive);
+}
+
 QList<qint64> PrefixManager::processes(const QString& prefixPath)
 {
     // Любой процесс, в окружении которого WINEPREFIX указывает на этот префикс:
@@ -163,7 +172,8 @@ QList<qint64> PrefixManager::processes(const QString& prefixPath)
         const QList<QByteArray> vars = f.readAll().split('\0');
         for (const QByteArray& v : vars) {
             if (wanted.contains(v)) {
-                out << pid;
+                if (isWineProcess(pid))
+                    out << pid;
                 break;
             }
         }
@@ -265,6 +275,14 @@ QProcessEnvironment PrefixManager::makeEnv(const Prefix& p, const Runner& r, boo
     return e;
 }
 
+bool PrefixManager::checkIdle(QString* err) const
+{
+    if (!isBusy())
+        return true;
+    setErr(err, tr("Wait for the current operation to finish."));
+    return false;
+}
+
 void PrefixManager::startJob(const Prefix&, const Runner& r, const QStringList& args,
                              const QProcessEnvironment& env, const QString& okMsg,
                              std::function<void(bool)> after, const QString& workDir)
@@ -308,6 +326,8 @@ void PrefixManager::startJob(const Prefix&, const Runner& r, const QStringList& 
 
 bool PrefixManager::create(const QString& name, const QString& runner, const QString& arch, QString* err)
 {
+    if (!checkIdle(err))
+        return false;
     static const QRegularExpression re(QStringLiteral("^[\\p{L}\\p{N}][\\p{L}\\p{N} _.\\-]{0,63}$"));
     if (!re.match(name).hasMatch()) {
         setErr(err, tr("Invalid name. Letters, digits, space, _ . - are allowed (up to 64 characters)."));
@@ -363,10 +383,8 @@ bool PrefixManager::remove(const QString& name, QString* err)
         setErr(err, tr("Prefix not found."));
         return false;
     }
-    if (isBusy()) {
-        setErr(err, tr("Wait for the current operation to finish."));
+    if (!checkIdle(err))
         return false;
-    }
     const QString root = QFileInfo(Config::instance().prefixesDir()).canonicalFilePath();
     const QString canon = QFileInfo(p->path).canonicalFilePath();
     if (root.isEmpty() || !canon.startsWith(root + "/")) {
@@ -392,6 +410,8 @@ bool PrefixManager::remove(const QString& name, QString* err)
 
 bool PrefixManager::setRunner(const QString& name, const QString& runner, QString* err)
 {
+    if (!checkIdle(err))
+        return false;
     auto p = find(name);
     if (!p) {
         setErr(err, tr("Prefix not found."));
@@ -402,6 +422,8 @@ bool PrefixManager::setRunner(const QString& name, const QString& runner, QStrin
         setErr(err, tr("Wine '%1' was not found.").arg(runner));
         return false;
     }
+    // A wineserver of the previous Wine build would refuse to talk to the new one.
+    stopProcesses(*p);
     p->runner = runner;
     if (!p->save()) {
         setErr(err, tr("Could not write cask.json"));
@@ -480,6 +502,8 @@ void PrefixManager::importOverrides(const Prefix& p, const Runner& r, const QStr
 
 bool PrefixManager::applyComponent(const QString& name, const QString& type, const QString& version, QString* err)
 {
+    if (!checkIdle(err))
+        return false;
     auto po = find(name);
     if (!po) {
         setErr(err, tr("Prefix not found."));
@@ -575,6 +599,8 @@ bool PrefixManager::applyComponent(const QString& name, const QString& type, con
 
 bool PrefixManager::removeComponent(const QString& name, const QString& type, QString* err)
 {
+    if (!checkIdle(err))
+        return false;
     auto po = find(name);
     if (!po) {
         setErr(err, tr("Prefix not found."));

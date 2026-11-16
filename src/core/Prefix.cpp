@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSaveFile>
 
 namespace {
 const char* kMetaFile = "cask.json";
@@ -37,11 +38,10 @@ bool Prefix::save() const
     s["env"] = env;
     o["settings"] = s;
 
-    QFile f(path + "/" + kMetaFile);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-        return false;
-    f.write(QJsonDocument(o).toJson(QJsonDocument::Indented));
-    return true;
+    // Atomic write: a crash in the middle must not leave a half-written cask.json.
+    const QByteArray data = QJsonDocument(o).toJson(QJsonDocument::Indented);
+    QSaveFile f(path + "/" + kMetaFile);
+    return f.open(QIODevice::WriteOnly) && f.write(data) == data.size() && f.commit();
 }
 
 std::optional<Prefix> Prefix::load(const QString& dir)

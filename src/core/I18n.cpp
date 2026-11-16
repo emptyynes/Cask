@@ -57,6 +57,7 @@ private:
 
 JsonTranslator& translator()
 {
+    // Deliberately never destroyed: it must outlive QCoreApplication during static destruction.
     static JsonTranslator* t = new JsonTranslator;
     return *t;
 }
