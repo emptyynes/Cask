@@ -124,3 +124,10 @@ Translation check (also run by GitHub Actions):
 ```
 python3 scripts/check-translations.py        # all strings translated, placeholders match
 ```
+
+## License
+
+Cask is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+License as published by the Free Software Foundation, either version 3 of the License, or (at your option)
+any later version. See [LICENSE](LICENSE). Release archives also contain the Qt libraries, which are
+licensed under the LGPL-3.0 (https://www.qt.io/licensing/).
