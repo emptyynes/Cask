@@ -2,7 +2,7 @@
   description = "Cask: a Wine prefix manager written in C++/Qt";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     # This branch holds only the Nix files; the program itself is taken from `main`.
     cask-src = {
       url = "github:ndiruhniu/cask/v0.1.0";
