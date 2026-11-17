@@ -98,13 +98,13 @@ public:
 
 protected:
     // The wrapped hint makes the layout's minimum height unreliable (the window could be squeezed until
-    // the widgets overlap), so the height always follows the width: it can be widened, not squashed.
+    // the widgets overlap), so the minimum height always follows the width: the window can be enlarged, not squashed.
     void resizeEvent(QResizeEvent* e) override
     {
         QDialog::resizeEvent(e);
         const int h = layout()->totalHeightForWidth(width());
         if (h > 0 && minimumHeight() != h)
-            setFixedHeight(h);
+            setMinimumHeight(h);
     }
 
 private:
