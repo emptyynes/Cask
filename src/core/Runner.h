@@ -4,7 +4,8 @@
 #include <QString>
 #include <optional>
 
-// A Wine build. Lives in data/runners/<name>/bin/wine, or the system wine from PATH.
+// A Wine build. Lives in data/runners/<name>/bin/wine (or <name>/files/bin/wine for a Proton build),
+// or is the system wine from PATH.
 struct Runner {
     QString name;    // "system" or the folder name in data/runners
     QString binDir;  // folder with wine/wineserver

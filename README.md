@@ -13,7 +13,7 @@ Cask/
 ├── cask.ini        settings (created next to the binary)
 ├── lib/            bundled dependencies (Qt etc.), RPATH = $ORIGIN/lib
 ├── data/
-│   ├── runners/<name>/bin/wine      Wine builds
+│   ├── runners/<name>/bin/wine      Wine builds (Proton: runners/<name>/files/bin/wine)
 │   ├── d7vk/<version>/{x64,x32}/*.dll
 │   ├── dxvk/<version>/{x64,x32}/*.dll
 │   ├── vkd3d-proton/<version>/{x64,x86}/*.dll
@@ -35,6 +35,9 @@ Cask/
 
 ## Features
 
+- Wine builds and Proton builds (for example Proton-GE: unpack the folder into `data/runners/`) are used as plain
+  Wine from `files/bin/wine`. The `proton` script itself, `umu` and the Steam runtime are not used, so the
+  `PROTON_*` variables have no effect.
 - Create (win64/win32, choice of Wine) and delete prefixes.
 - Change the Wine of an existing prefix by picking it in the list: the selected build is applied
   immediately (`wineboot -u`).
