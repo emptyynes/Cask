@@ -21,6 +21,21 @@ The Nix store is read-only, so the package installs a small launcher that sets `
 }
 ```
 
+**Release or any commit.** By default the flake follows the sources it is locked to. After every release the
+Build workflow on `main` points this branch at the new tag, so the default is the latest release. To choose
+another version, override the input in your flake:
+
+```nix
+inputs.cask = {
+  url = "github:ndiruhniu/cask/nixos";
+  inputs.cask-src.url = "github:ndiruhniu/cask/v1.2.3";   # a tag, or a commit hash, or "main"
+  inputs.nixpkgs.follows = "nixpkgs";                      # optional: use your own nixpkgs
+};
+```
+
+"About" shows the release number when the sources are exactly the release commit, otherwise the short
+commit hash.
+
 **Without flakes:** copy `nix/package.nix` and `nix/program.nix` and add `imports = [ ./program.nix ];`. The sources are fetched from `main` automatically
 (override with `caskSrc` if you want your own copy).
 
