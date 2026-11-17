@@ -37,7 +37,8 @@ Cask/
 
 - Wine builds and Proton builds (for example Proton-GE: unpack the folder into `data/runners/`) are used as plain
   Wine from `files/bin/wine`. The `proton` script itself, `umu` and the Steam runtime are not used, so the
-  `PROTON_*` variables have no effect.
+  `PROTON_*` variables have no effect. If the build's `wine` loader is 32-bit and the system has no 32-bit
+  libraries, `wine64` is used instead (32-bit programs then cannot run).
 - Create (win64/win32, choice of Wine) and delete prefixes.
 - Change the Wine of an existing prefix by picking it in the list: the selected build is applied
   immediately (`wineboot -u`).

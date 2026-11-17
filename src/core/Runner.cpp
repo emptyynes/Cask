@@ -3,10 +3,25 @@
 #include "Config.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QStandardPaths>
 
 namespace RunnerManager {
+
+namespace {
+
+// True for a 32-bit ELF executable (the "wine" loader of builds that keep 32-bit and 64-bit loaders apart).
+bool is32BitElf(const QString& path)
+{
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly))
+        return false;
+    const QByteArray head = f.read(5);
+    return head.size() == 5 && head.startsWith("\x7f""ELF") && head.at(4) == 1;
+}
+
+}  // namespace
 
 QList<Runner> available()
 {
@@ -32,6 +47,11 @@ QList<Runner> available()
         }
         if (wine.isEmpty())
             continue;
+        // On a system without 32-bit libraries the 32-bit "wine" loader cannot even start
+        // ("/lib/ld-linux.so.2: could not open"): use the 64-bit "wine64" of the same build instead.
+        if (wine.endsWith(QLatin1String("/wine")) && is32BitElf(wine) && !QFileInfo::exists(QStringLiteral("/lib/ld-linux.so.2"))
+            && QFileInfo(bin + "/wine64").isExecutable())
+            wine = bin + "/wine64";
         out.append(Runner{name, bin, wine, false});
     }
 
