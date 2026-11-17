@@ -176,6 +176,7 @@ stdenv.mkDerivation (finalAttrs: {
 
   meta = {
     description = "Wine prefix manager written in C++/Qt";
+    license = lib.licenses.gpl3Plus;
     mainProgram = "cask";
     platforms = lib.platforms.linux;
   };
