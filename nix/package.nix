@@ -68,6 +68,43 @@ let
     "application/x-bat"
   ];
 
+  # Libraries of the FHS environment (see passthru.fhs). Also used by the declarative setup service of
+  # the NixOS module (nix/declarative.nix), which has to run downloaded Wine builds in the same environment.
+  fhsMultiPkgs =
+    pkgs:
+    let
+      # nixpkgs is moving the X11 libraries out of `xorg`; accept both spellings.
+      x = new: old: pkgs.${new} or pkgs.xorg.${old};
+    in
+    with pkgs;
+    [
+      alsa-lib
+      fontconfig
+      freetype
+      gnutls
+      libGL
+      libpulseaudio
+      libusb1
+      libunwind # ntdll.so of the GE/Lutris builds
+      libxkbcommon
+      openal
+      sdl3
+      vulkan-loader
+      (x "libx11" "libX11")
+      (x "libxcomposite" "libXcomposite")
+      (x "libxcursor" "libXcursor")
+      (x "libxext" "libXext")
+      (x "libxi" "libXi")
+      (x "libxinerama" "libXinerama")
+      (x "libxrandr" "libXrandr")
+      (x "libxrender" "libXrender")
+      (x "libxxf86vm" "libXxf86vm")
+    ];
+
+  fhsProfile = ''
+    export LD_LIBRARY_PATH=/run/opengl-driver/lib:/run/opengl-driver-32/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+  '';
+
   # `bin/cask`: sets the root and starts the wrapped binary. The Nix parts are expanded when the
   # package is built, the shell parts (written with ''${ ) when the user runs it.
   launcher = writeText "cask-launcher" ''
@@ -131,7 +168,7 @@ stdenv.mkDerivation (finalAttrs: {
   ];
 
   passthru = {
-    inherit mimeTypes;
+    inherit mimeTypes fhsMultiPkgs fhsProfile;
 
     # Cask inside an FHS environment (like steam-run). Needed for Wine/Proton builds that you
     # download and put into Cask's data/runners: such generic Linux binaries do not run on NixOS
@@ -139,39 +176,12 @@ stdenv.mkDerivation (finalAttrs: {
     fhs = buildFHSEnv {
       name = "cask";
       targetPkgs = _: [ finalAttrs.finalPackage ];
-      multiPkgs =
-        pkgs:
-        let
-          # nixpkgs is moving the X11 libraries out of `xorg`; accept both spellings.
-          x = new: old: pkgs.${new} or pkgs.xorg.${old};
-        in
-        with pkgs;
-        [
-          alsa-lib
-          fontconfig
-          freetype
-          gnutls
-          libGL
-          libpulseaudio
-          libusb1
-          libxkbcommon
-          openal
-          sdl3
-          vulkan-loader
-          (x "libx11" "libX11")
-          (x "libxcomposite" "libXcomposite")
-          (x "libxcursor" "libXcursor")
-          (x "libxext" "libXext")
-          (x "libxi" "libXi")
-          (x "libxinerama" "libXinerama")
-          (x "libxrandr" "libXrandr")
-          (x "libxrender" "libXrender")
-          (x "libxxf86vm" "libXxf86vm")
-        ];
+      # Without multiArch the 32-bit libraries (multiPkgs) and the 32-bit loader /lib/ld-linux.so.2 are left out,
+      # and the 32-bit part of Wine builds (bin/wine of most of them) cannot start.
+      multiArch = true;
+      multiPkgs = fhsMultiPkgs;
       runScript = "cask";
-      profile = ''
-        export LD_LIBRARY_PATH=/run/opengl-driver/lib:/run/opengl-driver-32/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
-      '';
+      profile = fhsProfile;
       extraInstallCommands = ''
         mkdir -p $out/share
         ln -s ${finalAttrs.finalPackage}/share/applications $out/share/applications

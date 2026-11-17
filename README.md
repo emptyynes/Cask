@@ -1,7 +1,8 @@
 # Cask: Nix packaging
 
-This branch contains only the Nix files: `flake.nix`, `nix/package.nix` (derivation) and `nix/program.nix`
-(NixOS module `programs.cask`). The program itself lives in the `main` branch and is fetched from there
+This branch contains only the Nix files: `flake.nix`, `nix/package.nix` (derivation), `nix/program.nix`
+(NixOS module `programs.cask`) and, for the declarative setup of runners, components and prefixes,
+`nix/declarative.nix` with `nix/cask-sync.sh`. The program itself lives in the `main` branch and is fetched from there
 (flake input `cask-src`; run `nix flake update cask-src` to move to a newer `main`).
 
 The Nix store is read-only, so the package installs a small launcher that sets `CASK_ROOT`
@@ -36,7 +37,7 @@ inputs.cask = {
 "About" shows the release number when the sources are exactly the release commit, otherwise the short
 commit hash.
 
-**Without flakes:** copy `nix/package.nix` and `nix/program.nix` and add `imports = [ ./program.nix ];`. The sources are fetched from `main` automatically
+**Without flakes:** copy `nix/package.nix`, `nix/program.nix`, `nix/declarative.nix` and `nix/cask-sync.sh` into one folder and add `imports = [ ./program.nix ];`. The sources are fetched from `main` automatically
 (override with `caskSrc` if you want your own copy).
 
 | Option | Meaning |
@@ -50,9 +51,65 @@ commit hash.
 | `gamemode` | Enable `programs.gamemode`. |
 | `graphics32` | Enable 32-bit graphics support (default true). |
 | `defaultForWindowsFiles` | Make Cask the default for `.exe`, `.msi`, `.bat`, `.lnk`. |
+| `user` | The user whose Cask folder the options below set up (required when any of them is used). |
+| `runners.<name>` | Wine builds to download: `url`, `hash`, and `subdir` / `stripRoot` / `extension` if needed. |
+| `components.<dxvk,d7vk,vkd3d-proton>.<version>` | DXVK, D7VK, VKD3D-Proton versions to download: `url`, `hash`. |
+| `prefixes.<name>` | Prefixes to have: `runner`, `arch`, `components.<type> = "<version>"`, `winetricks = [ verbs ]`. |
+| `xvfb` | Run the setup on a virtual X server (default true). |
 
 Development: inside a checkout of `main`, `nix develop github:ndiruhniu/cask/nixos` gives a shell with the build tools and `CASK_ROOT=$PWD/.cask-dev`;
 `nix build` / `nix run` build and start the package.
 
 Note: keep "Integrate with the desktop" in Cask's settings **off** on NixOS; the package ships its own
 desktop entry and the module sets the MIME defaults.
+
+## Declarative runners, components and prefixes
+
+```nix
+programs.cask = {
+  enable = true;
+  user = "alice";
+  fhs = true;                              # downloaded Wine builds need it
+  dataDir = "$HOME/Games/Cask";            # prefixes go to <dataDir>/prefixes
+
+  runners."wine-ge-8-26" = {
+    url = "https://github.com/GloriousEggroll/wine-ge-custom/releases/download/GE-Proton8-26/wine-lutris-GE-Proton8-26-x86_64.tar.xz";
+    hash = "sha256-...";
+  };
+  components.dxvk."dxvk-2.7.1" = {
+    url = "https://github.com/doitsujin/dxvk/releases/download/v2.7.1/dxvk-2.7.1.tar.gz";
+    hash = "sha256-...";
+  };
+  prefixes.games = {
+    runner = "wine-ge-8-26";               # or "system" (programs.cask.wine)
+    arch = "win64";
+    components.dxvk = "dxvk-2.7.1";
+    winetricks = [ "corefonts" "vcrun2022" "win10" ];
+  };
+};
+```
+
+**Downloads** are done by Nix (`fetchzip`): the archive is checked against `hash`, unpacked into the store and linked
+from `<dataDir>/data/runners/<name>` or `<dataDir>/data/<type>/<version>`. `hash` is the hash of the *unpacked*
+archive: put `lib.fakeHash` there first, and the build error shows the right value. Proton builds keep `bin/wine` in
+`files/`, so they need `subdir = "files"`.
+
+**The setup** is the `cask-sync` systemd service. It runs as `programs.cask.user` on every `nixos-rebuild switch`
+whose configuration changed, and at boot; the rebuild waits for it, the output is in `journalctl -u cask-sync`
+(`systemctl restart cask-sync` runs it again by hand). It only does what differs from the configuration:
+
+- A runner or component that is linked already is not touched. A folder or link that Nix did not create is never
+  replaced (a warning is printed); links of runners and components that are no longer declared are removed.
+- A prefix that exists is not rebuilt. A new one is created the way Cask does it (`wineboot --init`, `cask.json`).
+  If `runner` differs from the one in `cask.json`, the prefix is switched like Cask does (`wineboot -u`). `arch` cannot
+  be changed in place: the old prefix is renamed to `<name>.old-<arch>-<date>` (nothing is deleted) and a new one is
+  created.
+- A winetricks verb that is in the prefix's `winetricks.log` is not run again; the verbs run in the given order, and
+  a failed one stops the rest of that prefix (the next run retries it). winetricks downloads its own files into
+  `<dataDir>/data/winetricks/cache`; they are checked by winetricks, not by Nix.
+- A component version is applied the way Cask applies it (DLLs copied with `*.cask-bak` backups, `native,builtin`
+  overrides in the registry, the files recorded in `cask.json`); a changed version rolls the old one back first.
+  Components that the configuration does not mention are left as they are, as are prefixes that are not listed.
+
+Not covered: a `paths/data` or `paths/prefixes` that you set in Cask's own settings (the service uses the
+`<dataDir>/data` and `<dataDir>/prefixes` defaults).

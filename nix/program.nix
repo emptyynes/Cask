@@ -27,6 +27,9 @@ let
   finalPackage = if cfg.fhs then configured.fhs else configured;
 in
 {
+  # Declarative runners, components, prefixes and winetricks verbs (programs.cask.{user,runners,components,prefixes}).
+  imports = [ ./declarative.nix ];
+
   options.programs.cask = {
     enable = lib.mkEnableOption "Cask, a Wine prefix manager";
 
@@ -36,7 +39,8 @@ in
       defaultText = lib.literalExpression "pkgs.callPackage ./package.nix { }";
       description = ''
         The Cask package. It must accept the arguments of `package.nix`
-        (`dataDir`, `wine`, `extraPackages`) and provide the `fhs` attribute.
+        (`dataDir`, `wine`, `extraPackages`) and provide the `fhs`, `fhsMultiPkgs` and `fhsProfile`
+        attributes.
       '';
     };
 
