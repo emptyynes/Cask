@@ -4,7 +4,7 @@ name: Nix
 on:
   push:
     branches: [nixos]
-    paths: ['flake.nix', 'flake.lock', 'nix/**', 'CMakeLists.txt', 'src/**', 'resources/**', '.github/workflows/nix.yml']
+    paths: ['flake.nix', 'flake.lock', 'nix/**', '.github/workflows/nix.yml']
   pull_request:
     paths: ['flake.nix', 'flake.lock', 'nix/**', '.github/workflows/nix.yml']
   workflow_dispatch:
@@ -19,11 +19,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Sources for the dev shell test (this branch has only the Nix files).
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main-src
+
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
             accept-flake-config = true
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
 
       # flake.lock pins nixpkgs; create it if it is not committed yet.
       - name: Lock inputs
@@ -51,7 +58,7 @@ jobs:
         run: nix build .#cask-fhs --print-build-logs --no-link
 
       - name: Dev shell
-        run: nix develop --command bash -c 'cmake -S . -B /tmp/b -G Ninja && cmake --build /tmp/b'
+        run: nix develop "$PWD" --command bash -c 'cd main-src && cmake -S . -B /tmp/b -G Ninja && cmake --build /tmp/b'
 
       # Evaluate a NixOS configuration that uses the module with its options.
       - name: NixOS module

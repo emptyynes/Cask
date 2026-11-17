@@ -5,8 +5,8 @@
 # root (CASK_ROOT) at a writable directory in the user's home (see `dataDir`) and then starts
 # the Qt-wrapped binary. The C++ sources are not touched.
 #
-# Standalone use (without the flake):
-#   cask = pkgs.callPackage ./package.nix { caskSrc = <path or fetchFromGitHub of the Cask sources>; };
+# Standalone use (without the flake): pkgs.callPackage ./package.nix { };
+# The sources are not part of this branch; they come from the `main` branch.
 {
   lib,
   stdenv,
@@ -27,15 +27,12 @@
   gamemode,
   mangohud,
 
-  # Sources: only what the build needs, so editing docs or Nix files does not rebuild Cask.
+  # Sources of Cask (the `main` branch). The flake passes its pinned `cask-src` input here; without
+  # the flake the latest `main` is fetched. Pass your own path or fetchFromGitHub to override.
   # (Not called `src`: nixpkgs has a top-level `src` alias that callPackage would pick up.)
-  caskSrc ? lib.fileset.toSource {
-    root = ../.;
-    fileset = lib.fileset.unions [
-      ../CMakeLists.txt
-      ../src
-      ../resources
-    ];
+  caskSrc ? builtins.fetchGit {
+    url = "https://github.com/ndiruhniu/cask";
+    ref = "main";
   },
 
   # Where Cask keeps everything (CASK_ROOT: cask.ini, data/, prefixes/). A shell expression:

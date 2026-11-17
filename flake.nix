@@ -1,10 +1,21 @@
 {
   description = "Cask: a Wine prefix manager written in C++/Qt";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # This branch holds only the Nix files; the program itself is taken from `main`.
+    cask-src = {
+      url = "github:ndiruhniu/cask/main";
+      flake = false;
+    };
+  };
 
   outputs =
-    { self, nixpkgs }:
+    {
+      self,
+      nixpkgs,
+      cask-src,
+    }:
     let
       systems = [
         "x86_64-linux"
@@ -15,7 +26,7 @@
     {
       # nix build, nix run
       packages = forAllSystems (pkgs: rec {
-        cask = pkgs.callPackage ./nix/package.nix { };
+        cask = pkgs.callPackage ./nix/package.nix { caskSrc = cask-src; };
         cask-fhs = cask.fhs;
         default = cask;
       });
@@ -27,7 +38,8 @@
         };
       });
 
-      # nix develop: everything to build, debug and run Cask from a checkout.
+      # nix develop: everything to build, debug and run Cask. Run it inside a checkout of `main`
+      # (e.g. `nix develop github:ndiruhniu/cask/nixos`).
       #   cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug && cmake --build build && build/Cask/cask
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {
@@ -52,7 +64,7 @@
 
       # For other flakes: `inputs.cask.overlays.default` gives `pkgs.cask`.
       overlays.default = final: _prev: {
-        cask = final.callPackage ./nix/package.nix { };
+        cask = final.callPackage ./nix/package.nix { caskSrc = cask-src; };
       };
 
       # For NixOS configurations: `imports = [ inputs.cask.nixosModules.default ];`
