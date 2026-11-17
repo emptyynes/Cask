@@ -17,6 +17,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QVBoxLayout>
 
 class SettingsDialog : public QDialog {
@@ -94,6 +95,17 @@ public:
     }
 
     bool languageChanged() const { return m_languageChanged; }
+
+protected:
+    // The wrapped hint makes the layout's minimum height unreliable (the window could be squeezed until
+    // the widgets overlap), so the height always follows the width: it can be widened, not squashed.
+    void resizeEvent(QResizeEvent* e) override
+    {
+        QDialog::resizeEvent(e);
+        const int h = layout()->totalHeightForWidth(width());
+        if (h > 0 && minimumHeight() != h)
+            setFixedHeight(h);
+    }
 
 private:
     QWidget* row(QLineEdit* edit)
