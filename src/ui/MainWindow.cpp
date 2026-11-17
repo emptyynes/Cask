@@ -143,6 +143,22 @@ void MainWindow::closeEvent(QCloseEvent* event)
     QMainWindow::closeEvent(event);
 }
 
+// Size hints of widgets that are not polished yet (the style has not applied its fonts and margins) are
+// too small with some themes, so the minimum size is recomputed once the window is shown and whenever the
+// style or font changes.
+void MainWindow::showEvent(QShowEvent* event)
+{
+    QMainWindow::showEvent(event);
+    QTimer::singleShot(0, this, [this] { fitToContent(); });
+}
+
+void MainWindow::changeEvent(QEvent* event)
+{
+    QMainWindow::changeEvent(event);
+    if ((event->type() == QEvent::StyleChange || event->type() == QEvent::FontChange) && m_details)
+        QTimer::singleShot(0, this, [this] { fitToContent(); });
+}
+
 void MainWindow::buildUi()
 {
     // Toolbar
@@ -347,6 +363,7 @@ void MainWindow::buildUi()
 // hidden behind a scroll bar) and starts at the size that exactly fits it.
 void MainWindow::fitToContent()
 {
+    m_details->ensurePolished();  // hints are only reliable after the style has been applied
     const int leftMin = 230;
     const int handle = m_central->handleWidth();
     const QSize detailsMin = m_details->minimumSizeHint();
@@ -363,6 +380,8 @@ void MainWindow::fitToContent()
         m_central->setSizes({leftMin + 40, detailsWanted.width()});
         resize(wanted.expandedTo(minimumSizeHint()));
         m_sized = true;
+    } else {
+        resize(size().expandedTo(minimumSizeHint()));  // the minimum may have grown (new style or font)
     }
 }
 
