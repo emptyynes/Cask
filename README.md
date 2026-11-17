@@ -3,6 +3,8 @@
 A Wine prefix manager written in C++/Qt, in the spirit of Bottles. Wine builds and DXVK/D7VK/VKD3D-Proton
 packages are placed manually (there is no downloader yet).
 
+![Cask main window](docs/screenshot.png)
+
 ## Portable layout
 
 ```
