@@ -21,12 +21,21 @@
         "x86_64-linux"
         "aarch64-linux"
       ];
+      # nix/release.json is rewritten when a release is published (see the Build workflow on `main`):
+      # if cask-src is exactly the release commit, "About" shows the release number, otherwise the short hash.
+      release = builtins.fromJSON (builtins.readFile ./nix/release.json);
+      caskVersion =
+        if release.rev != null && (cask-src.rev or null) == release.rev then
+          release.version
+        else
+          cask-src.shortRev or "dev";
+      callCask = pkgs: pkgs.callPackage ./nix/package.nix { caskSrc = cask-src; version = caskVersion; };
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
     in
     {
       # nix build, nix run
       packages = forAllSystems (pkgs: rec {
-        cask = pkgs.callPackage ./nix/package.nix { caskSrc = cask-src; };
+        cask = callCask pkgs;
         cask-fhs = cask.fhs;
         default = cask;
       });
@@ -64,7 +73,7 @@
 
       # For other flakes: `inputs.cask.overlays.default` gives `pkgs.cask`.
       overlays.default = final: _prev: {
-        cask = final.callPackage ./nix/package.nix { caskSrc = cask-src; };
+        cask = callCask final;
       };
 
       # For NixOS configurations: `imports = [ inputs.cask.nixosModules.default ];`

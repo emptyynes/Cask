@@ -35,6 +35,9 @@
     ref = "main";
   },
 
+  # Version shown in "About" (and used as the package version): a release number or the short commit hash.
+  version ? caskSrc.shortRev or "dev",
+
   # Where Cask keeps everything (CASK_ROOT: cask.ini, data/, prefixes/). A shell expression:
   # it may use $HOME or $XDG_DATA_HOME. An existing CASK_ROOT in the environment always wins.
   dataDir ? "\${XDG_DATA_HOME:-$HOME/.local/share}/cask",
@@ -75,9 +78,11 @@ let
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "cask";
-  version = "0.1.0";
+  inherit version;
 
   src = caskSrc;
+
+  cmakeFlags = [ (lib.cmakeFeature "CASK_VERSION" version) ];
 
   nativeBuildInputs = [
     cmake
