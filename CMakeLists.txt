@@ -34,6 +34,21 @@ add_executable(cask
     src/ui/PrefixPickerDialog.h
 )
 
+# Version shown in "About": -DCASK_VERSION=<x> (CI passes the release version or the short commit hash),
+# otherwise the short hash of the local checkout, otherwise "dev".
+if(NOT CASK_VERSION)
+    find_package(Git QUIET)
+    if(GIT_FOUND)
+        execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --short=7 HEAD
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            OUTPUT_VARIABLE CASK_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    endif()
+    if(NOT CASK_VERSION)
+        set(CASK_VERSION "dev")
+    endif()
+endif()
+target_compile_definitions(cask PRIVATE CASK_VERSION="${CASK_VERSION}")
+
 target_include_directories(cask PRIVATE src)
 target_link_libraries(cask PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 

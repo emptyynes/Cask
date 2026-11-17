@@ -31,6 +31,7 @@ private slots:
     void newPrefix();
     void deletePrefix();
     void openSettings();
+    void showAbout();
     void runExe();
     void openFolder();
     void applyRunner();

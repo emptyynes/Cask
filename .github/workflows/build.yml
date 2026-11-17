@@ -30,8 +30,11 @@ jobs:
       - name: Check translations
         run: python3 scripts/check-translations.py
 
+      # Version for "About": the tag without "v" for a release, otherwise the short commit hash.
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version="${GITHUB_REF_NAME#v}"; else version="${GITHUB_SHA::7}"; fi
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCASK_VERSION="$version"
 
       - name: Build
         run: cmake --build build

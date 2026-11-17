@@ -154,6 +154,7 @@ void MainWindow::buildUi()
     };
     addAct(tr("New prefix"), &MainWindow::newPrefix);
     addAct(tr("Settings"), &MainWindow::openSettings);
+    addAct(tr("About"), &MainWindow::showAbout);
 
     // Center: prefix list on the left, details on the right
     m_central = new QSplitter(this);
@@ -616,6 +617,18 @@ void MainWindow::openSettings()
         retranslate();
     else
         refresh();
+}
+
+void MainWindow::showAbout()
+{
+    QMessageBox box(this);
+    box.setWindowTitle(tr("About"));
+    box.setIcon(QMessageBox::NoIcon);
+    box.setTextFormat(Qt::RichText);
+    box.setText(QStringLiteral("<h2>Cask</h2><p>%1</p><p>%2</p>")
+                    .arg(tr("Minimalist Wine prefix manager").toHtmlEscaped(),
+                         tr("Version %1").arg(QStringLiteral(CASK_VERSION)).toHtmlEscaped()));
+    box.exec();
 }
 
 void MainWindow::runExe()
