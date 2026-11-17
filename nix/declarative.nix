@@ -35,6 +35,25 @@ let
   validVerb = verb: builtins.match "[A-Za-z0-9][A-Za-z0-9_.+=-]*" verb != null;
   validName = name: name != "" && !(lib.hasInfix "/" name) && !(lib.hasPrefix "." name);
 
+  # Cask drops variables with other names, and the ones it sets itself (LaunchSettings::isValidEnvName,
+  # reservedEnvNames), when it loads cask.json: they would silently not work.
+  reservedEnvNames = [
+    "WINEPREFIX"
+    "WINEARCH"
+    "PATH"
+    "LANG"
+    "LC_ALL"
+    "DXVK_STATE_CACHE_PATH"
+    "DXVK_SHADER_CACHE_PATH"
+    "MESA_SHADER_CACHE_DIR"
+    "VKD3D_SHADER_CACHE_PATH"
+  ];
+  validEnvName = name: builtins.match "[A-Za-z_][A-Za-z0-9_]*" name != null;
+  # A DLL name without extension (`*` is allowed) and what Wine accepts as an override: a list of
+  # native/builtin (n/b), or an empty string to disable the DLL.
+  validOverrideName = name: builtins.match "[A-Za-z0-9_.*+-]+" name != null && !(lib.hasSuffix ".dll" name);
+  validOverrideValue = value: builtins.match "|(native|builtin|n|b)(,(native|builtin|n|b))*" value != null;
+
   downloadOptions = {
     url = lib.mkOption {
       type = lib.types.str;
@@ -124,6 +143,37 @@ let
           '';
         }
       );
+      env = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        default = { };
+        example = {
+          DXVK_HUD = "fps";
+          WINEDEBUG = "-all";
+        };
+        description = ''
+          Environment variables of the programs that Cask starts in this prefix (the same list as
+          "Environment variables" in Cask). Not allowed: the ones Cask sets itself (`WINEPREFIX`, `WINEARCH`,
+          `PATH`, `LANG`, `LC_ALL`, `DXVK_STATE_CACHE_PATH`, `DXVK_SHADER_CACHE_PATH`,
+          `MESA_SHADER_CACHE_DIR`, `VKD3D_SHADER_CACHE_PATH`). Variables you add in Cask yourself are kept;
+          one that is removed from here is removed from the prefix.
+        '';
+      };
+      dllOverrides = lib.mkOption {
+        type = lib.types.attrsOf lib.types.str;
+        default = { };
+        example = {
+          d3d11 = "native,builtin";
+          winmm = "builtin";
+          mscoree = "";
+        };
+        description = ''
+          DLL overrides of the prefix, written to `HKCU\Software\Wine\DllOverrides`: the DLL name without
+          extension (or `*`) and `native`, `builtin`, `native,builtin`, `builtin,native` (`n` and `b` work
+          too), or `""` to disable the DLL. They are set after the components, so they win over the ones a
+          component has set. One that is removed from here is removed from the registry; the others are
+          not touched.
+        '';
+      };
       winetricks = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [ ];
@@ -178,7 +228,7 @@ let
       runners = runnerPaths;
       components = componentPaths;
       prefixes = lib.mapAttrs (_: p: {
-        inherit (p) runner arch winetricks;
+        inherit (p) runner arch winetricks env dllOverrides;
         components = lib.filterAttrs (_: version: version != null) p.components;
       }) cfg.prefixes;
     }
@@ -249,8 +299,8 @@ in
         The user whose Cask folder ({option}`programs.cask.dataDir`) is set up by
         {option}`programs.cask.runners`, {option}`programs.cask.components` and
         {option}`programs.cask.prefixes`. The `cask-sync` service runs as this user on
-        `nixos-rebuild switch` (and at boot), so a long winetricks verb makes the rebuild wait
-        for it. Its output is in `journalctl -u cask-sync`.
+        `nixos-rebuild switch`/`test` (every time, not only when the configuration changed) and at boot, so a
+        long winetricks verb makes the rebuild wait for it. Its output is in `journalctl -u cask-sync`.
       '';
     };
 
@@ -376,6 +426,26 @@ in
                 + " apply DXVK, VKD3D-Proton and D9VK with programs.cask.prefixes.<name>.components.";
             }
           ]) p.winetricks
+          ++ lib.concatMap (var: [
+            {
+              assertion = validEnvName var;
+              message = "programs.cask.prefixes.\"${name}\".env: \"${var}\" is not a valid variable name (Cask accepts [A-Za-z_][A-Za-z0-9_]*).";
+            }
+            {
+              assertion = !(lib.elem var reservedEnvNames);
+              message = "programs.cask.prefixes.\"${name}\".env: \"${var}\" is set by Cask itself and would be ignored.";
+            }
+          ]) (lib.attrNames p.env)
+          ++ lib.concatMap (dll: [
+            {
+              assertion = validOverrideName dll;
+              message = "programs.cask.prefixes.\"${name}\".dllOverrides: \"${dll}\" is not a DLL name (write it without the .dll extension).";
+            }
+            {
+              assertion = validOverrideValue p.dllOverrides.${dll};
+              message = "programs.cask.prefixes.\"${name}\".dllOverrides.${dll} = \"${p.dllOverrides.${dll}}\": use native, builtin, native,builtin, builtin,native (n/b) or \"\" to disable.";
+            }
+          ]) (lib.attrNames p.dllOverrides)
           ++ lib.concatMap (
             type:
             lib.optional (p.components.${type} != null) {
@@ -399,7 +469,9 @@ in
         "network-online.target"
         "local-fs.target"
       ];
-      # Run again on `nixos-rebuild switch` when the configuration (the manifest) changed.
+      # No RemainAfterExit: the service is inactive after its run, and `switch-to-configuration` starts the active
+      # targets (and with them such services) on every switch, so the prefixes are checked after every rebuild.
+      # restartTriggers: also restart it if it is running while the configuration changes.
       restartTriggers = [
         manifest
         runScript
@@ -407,7 +479,6 @@ in
       environment.HOME = config.users.users.${cfg.user}.home;
       serviceConfig = {
         Type = "oneshot";
-        RemainAfterExit = true;
         User = cfg.user;
         TimeoutStartSec = "infinity";
         ExecStart = if cfg.fhs then "${fhsRun}/bin/cask-sync-fhs" else "${runScript}";

@@ -226,20 +226,16 @@ override_names() {
   done | sort -u
 }
 
-# import_overrides PREFIXDIR ARCH SET_NAMES REMOVE_NAMES: the native,builtin overrides in the registry via regedit.
-# SET_NAMES and REMOVE_NAMES are newline-separated lists. Needs resolve_runner to have been called.
-import_overrides() {
-  local p=$1 arch=$2 set_names=$3 remove_names=$4 reg="$1/cask-overrides.reg" n rc
-  [ -z "$set_names" ] && [ -z "$remove_names" ] && return 0
+# regedit_import PREFIXDIR ARCH LINES: imports LINES (newline-separated, `"name"="value"` or `"name"=-`) into
+# HKCU\Software\Wine\DllOverrides with regedit. Needs resolve_runner to have been called.
+regedit_import() {
+  local p=$1 arch=$2 lines=$3 reg="$1/cask-overrides.reg" line rc
   {
     printf '%s\r\n\r\n' 'Windows Registry Editor Version 5.00'
     printf '%s\r\n' '[HKEY_CURRENT_USER\Software\Wine\DllOverrides]'
-    while IFS= read -r n; do
-      if [ -n "$n" ]; then printf '"%s"="native,builtin"\r\n' "$n"; fi
-    done <<<"$set_names"
-    while IFS= read -r n; do
-      if [ -n "$n" ]; then printf '"%s"=-\r\n' "$n"; fi
-    done <<<"$remove_names"
+    while IFS= read -r line; do
+      if [ -n "$line" ]; then printf '%s\r\n' "$line"; fi
+    done <<<"$lines"
   } >"$reg" || return 1
   prefix_env "$p" "$arch"
   # The file is passed by its relative name from the prefix folder: more reliable than a unix path in regedit.
@@ -248,6 +244,38 @@ import_overrides() {
   env "${ENVV[@]}" "$WINESERVER" -w
   rm -f "$reg"
   return $rc
+}
+
+# import_overrides PREFIXDIR ARCH SET_NAMES REMOVE_NAMES: the native,builtin overrides of a component
+# (SET_NAMES and REMOVE_NAMES are newline-separated lists of DLL names).
+import_overrides() {
+  local p=$1 arch=$2 set_names=$3 remove_names=$4 lines="" n
+  while IFS= read -r n; do
+    if [ -n "$n" ]; then lines+="\"$n\"=\"native,builtin\""$'\n'; fi
+  done <<<"$set_names"
+  while IFS= read -r n; do
+    if [ -n "$n" ]; then lines+="\"$n\"=-"$'\n'; fi
+  done <<<"$remove_names"
+  [ -z "$lines" ] && return 0
+  regedit_import "$p" "$arch" "$lines"
+}
+
+# current_override PREFIXDIR NAME: the value of NAME in HKCU\Software\Wine\DllOverrides as Wine has saved it
+# in user.reg (the name is not case sensitive); fails if there is none.
+current_override() {
+  awk -v want="$2" '
+    BEGIN { w = tolower(want); found = 0 }
+    /^\[/ { insec = (tolower($0) ~ /^\[software\\\\wine\\\\dlloverrides\]/); next }
+    insec && /^"/ {
+      n = index($0, "\"=\"")
+      if (n == 0) next
+      name = substr($0, 2, n - 2)
+      val = substr($0, n + 3)
+      sub(/"[ \t]*$/, "", val)
+      if (tolower(name) == w) { print val; found = 1; exit }
+    }
+    END { exit found ? 0 : 1 }
+  ' "$1/user.reg"
 }
 
 # restore_files PREFIXDIR TYPE: rolls back the files of the component that is applied now. Sets
@@ -397,39 +425,144 @@ run_verb() {
 # prefixes
 # ---------------------------------------------------------------------------------------------
 
-# move_aside NAME ARCH: the architecture of an existing prefix cannot be changed in place, so the old
-# prefix is renamed (nothing is deleted) and a new one is created under the declared name.
-move_aside() {
-  local name=$1 arch=$2 p="$PREFIXES/$1" old backup
-  old=$(jq -r '.runner // "system"' "$p/cask.json")
-  stop_prefix "$p" "$old" "$arch"
-  backup="$PREFIXES/$name.old-$arch-$(date +%Y%m%d-%H%M%S)"
-  mv -- "$p" "$backup" || return 1
-  warn "prefix '$name' was $arch, the configuration wants another architecture: the old prefix is kept as '${backup##*/}'"
+# prefix_problem PREFIXDIR: integrity check of a prefix that has a valid cask.json. Prints what is wrong
+# and returns 0 if something is; returns 1 if the prefix is fine, or if it was never initialised
+# (no registry and no system32 at all: that is a new or interrupted creation, finished in place).
+# The checks are structural only; what is installed in the prefix is the user's business.
+prefix_problem() {
+  local p=$1 arch f
+  arch=$(jq -r '.arch' "$p/cask.json")
+  if [ ! -e "$p/system.reg" ] && [ ! -d "$p/drive_c/windows/system32" ]; then
+    return 1
+  fi
+  for f in system.reg user.reg userdef.reg; do
+    if [ ! -s "$p/$f" ]; then
+      echo "$f is missing or empty"
+      return 0
+    fi
+    if [ "$(head -n 1 "$p/$f")" != "WINE REGISTRY Version 2" ]; then
+      echo "$f is not a Wine registry file"
+      return 0
+    fi
+  done
+  if ! grep -qx "#arch=$arch" "$p/system.reg"; then
+    echo "system.reg is not of the architecture $arch from cask.json"
+    return 0
+  fi
+  for f in kernel32.dll ntdll.dll; do
+    if [ ! -s "$p/drive_c/windows/system32/$f" ]; then
+      echo "drive_c/windows/system32/$f is missing"
+      return 0
+    fi
+  done
+  if [ "$arch" = win64 ] && [ ! -d "$p/drive_c/windows/syswow64" ]; then
+    echo "drive_c/windows/syswow64 is missing"
+    return 0
+  fi
+  return 1
+}
+
+# set_aside NAME LABEL: stops the wineserver of the prefix and renames it to <name>.<label>-<date>
+# (nothing is deleted). Used for a prefix whose declared architecture changed (it cannot be changed in place).
+set_aside() {
+  local name=$1 label=$2 p="$PREFIXES/$1" old arch backup
+  if [ -f "$p/cask.json" ] && old=$(jq -r '.runner // "system"' "$p/cask.json" 2>/dev/null); then
+    arch=$(jq -r '.arch // "win64"' "$p/cask.json" 2>/dev/null)
+    stop_prefix "$p" "$old" "$arch"
+  fi
+  backup="$PREFIXES/$name.$label-$(date +%Y%m%d-%H%M%S)"
+  while [ -e "$backup" ]; do backup="$backup-again"; done
+  mv -T -- "$p" "$backup" || return 1
+  warn "prefix '$name' was set aside as '${backup##*/}'"
+}
+
+# sync_settings NAME PREFIXDIR ARCH: the environment variables (settings.env of cask.json, what Cask gives to
+# the programs it starts) and the DLL overrides (registry) of the configuration. Only what Nix has put there
+# earlier is ever removed; what the user set himself stays. What Nix manages is remembered in
+# cask-nix-state.json in the prefix, not in cask.json: Cask rewrites that with its own keys only.
+# Needs resolve_runner to have been called.
+sync_settings() {
+  local name=$1 p=$2 arch=$3 state="$2/cask-nix-state.json"
+  local want_env want_ov prev_env="[]" prev_ov="[]" drop_env new_state have cur n v lines=""
+  want_env=$(jq -c --arg n "$name" '.prefixes[$n].env' "$MANIFEST")
+  want_ov=$(jq -c --arg n "$name" '.prefixes[$n].dllOverrides' "$MANIFEST")
+  if [ ! -f "$state" ] && [ "$want_env" = "{}" ] && [ "$want_ov" = "{}" ]; then
+    return 0
+  fi
+  if [ -f "$state" ]; then
+    prev_env=$(jq -c '.env // []' "$state" 2>/dev/null) || prev_env="[]"
+    prev_ov=$(jq -c '.dllOverrides // []' "$state" 2>/dev/null) || prev_ov="[]"
+  fi
+
+  # Environment variables.
+  drop_env=$(jq -nc --argjson prev "$prev_env" --argjson want "$want_env" '$prev - ($want | keys)')
+  if ! jq -e --argjson want "$want_env" --argjson drop "$drop_env" '
+      (.settings.env // {}) as $cur
+      | ($want | to_entries | all(.value == $cur[.key]))
+        and ($drop | all(. as $k | $cur | has($k) | not))' "$p/cask.json" >/dev/null; then
+    cask_json_update "$p/cask.json" \
+      '.settings.env = ((.settings.env // {}) | with_entries(select(.key as $k | $drop | index($k) | not))) + $want' \
+      --argjson want "$want_env" --argjson drop "$drop_env" || return 1
+    log "prefix '$name': environment variables updated"
+  fi
+
+  # DLL overrides: set the ones that differ, remove the ones that Nix set earlier and are not declared now.
+  while IFS=$'\t' read -r n v; do
+    [ -z "$n" ] && continue
+    have=0
+    if cur=$(current_override "$p" "$n"); then have=1; fi
+    if [ "$have" -eq 0 ] || [ "$cur" != "$v" ]; then
+      lines+="\"$n\"=\"$v\""$'\n'
+    fi
+  done < <(jq -r 'to_entries[] | [.key, .value] | @tsv' <<<"$want_ov")
+  while IFS= read -r n; do
+    [ -z "$n" ] && continue
+    if current_override "$p" "$n" >/dev/null; then
+      lines+="\"$n\"=-"$'\n'
+    fi
+  done < <(jq -nr --argjson prev "$prev_ov" --argjson want "$want_ov" '$prev - ($want | keys) | .[]')
+  if [ -n "$lines" ]; then
+    regedit_import "$p" "$arch" "$lines" || {
+      err "prefix '$name': could not set the DLL overrides (regedit failed)"
+      return 1
+    }
+    log "prefix '$name': DLL overrides updated"
+  fi
+
+  new_state=$(jq -nc --argjson env "$want_env" --argjson ov "$want_ov" '{env: ($env | keys), dllOverrides: ($ov | keys)}')
+  if [ ! -f "$state" ] || [ "$(jq -c . "$state" 2>/dev/null)" != "$new_state" ]; then
+    printf '%s\n' "$new_state" >"$state.tmp" && mv -f "$state.tmp" "$state"
+  fi
+  return 0
 }
 
 sync_prefix() {
-  local name=$1 p="$PREFIXES/$1" want_runner want_arch cur_runner cur_arch verb comp type ver
+  local name=$1 p="$PREFIXES/$1" want_runner want_arch cur_runner cur_arch problem verb comp type ver
   local -a verbs=() comps=()
 
   want_runner=$(jq -r --arg n "$name" '.prefixes[$n].runner' "$MANIFEST")
   want_arch=$(jq -r --arg n "$name" '.prefixes[$n].arch' "$MANIFEST")
 
-  # A folder that Cask does not know (no cask.json) is not ours to touch, unless it is empty.
-  if [ -e "$p" ] && [ ! -f "$p/cask.json" ]; then
+  # A prefix that is not whole (or not a Cask prefix at all) is skipped: nothing in it is changed, and the
+  # other prefixes and the runners and components are still handled. It is not an error of the run.
+  if [ -e "$p" ]; then
     if [ -d "$p" ] && [ -z "$(ls -A "$p")" ]; then
       :
+    elif [ ! -f "$p/cask.json" ]; then
+      warn "prefix '$name': $p has no cask.json; skipped"
+      return 0
+    elif ! jq -e '(.runner | type == "string") and (.arch | type == "string")' "$p/cask.json" >/dev/null 2>&1; then
+      warn "prefix '$name': cask.json is not usable; skipped"
+      return 0
+    elif problem=$(prefix_problem "$p"); then
+      warn "prefix '$name' is broken ($problem); skipped. Fix it, or move it away to have it created again"
+      return 0
     else
-      err "prefix '$name': $p exists but has no cask.json; not touching it"
-      return 1
-    fi
-  fi
-
-  # The architecture cannot be changed in place.
-  if [ -f "$p/cask.json" ]; then
-    cur_arch=$(jq -r '.arch // "win64"' "$p/cask.json")
-    if [ "$cur_arch" != "$want_arch" ]; then
-      move_aside "$name" "$cur_arch" || return 1
+      cur_arch=$(jq -r '.arch' "$p/cask.json")
+      if [ "$cur_arch" != "$want_arch" ]; then
+        # The architecture cannot be changed in place.
+        set_aside "$name" "old-$cur_arch" || return 1
+      fi
     fi
   fi
 
@@ -486,6 +619,9 @@ sync_prefix() {
     fi
     apply_component "$p" "$type" "$ver" || return 1
   done
+
+  # After the components: a DLL override of the configuration wins over the one a component has set.
+  sync_settings "$name" "$p" "$want_arch" || return 1
 }
 
 # ---------------------------------------------------------------------------------------------

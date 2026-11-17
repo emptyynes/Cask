@@ -54,7 +54,7 @@ commit hash.
 | `user` | The user whose Cask folder the options below set up (required when any of them is used). |
 | `runners.<name>` | Wine builds to download: `url`, `hash`, and `subdir` / `stripRoot` / `extension` if needed. |
 | `components.<dxvk,d7vk,vkd3d-proton>.<version>` | DXVK, D7VK, VKD3D-Proton versions to download: `url`, `hash`. |
-| `prefixes.<name>` | Prefixes to have: `runner`, `arch`, `components.<type> = "<version>"`, `winetricks = [ verbs ]`. |
+| `prefixes.<name>` | Prefixes to have: `runner`, `arch`, `components.<type> = "<version>"`, `winetricks = [ verbs ]`, `env = { VAR = "value"; }`, `dllOverrides = { dll = "native,builtin"; }`. |
 | `xvfb` | Run the setup on a virtual X server (default true). |
 
 Development: inside a checkout of `main`, `nix develop github:ndiruhniu/cask/nixos` gives a shell with the build tools and `CASK_ROOT=$PWD/.cask-dev`;
@@ -85,6 +85,8 @@ programs.cask = {
     arch = "win64";
     components.dxvk = "dxvk-2.7.1";
     winetricks = [ "corefonts" "vcrun2022" "win10" ];
+    env.DXVK_HUD = "fps";                  # environment variables of the programs Cask starts
+    dllOverrides.winmm = "builtin";        # Wine DLL overrides ("" disables the DLL)
   };
 };
 ```
@@ -95,18 +97,28 @@ archive: put `lib.fakeHash` there first, and the build error shows the right val
 `files/`, so they need `subdir = "files"`.
 
 **The setup** is the `cask-sync` systemd service. It runs as `programs.cask.user` on every `nixos-rebuild switch`
-whose configuration changed, and at boot; the rebuild waits for it, the output is in `journalctl -u cask-sync`
-(`systemctl restart cask-sync` runs it again by hand). It only does what differs from the configuration:
+or `test` (also when the configuration did not change) and at boot; the rebuild waits for it, the output is in
+`journalctl -u cask-sync` (`systemctl start cask-sync` runs it again by hand). It only does what differs from the
+configuration:
 
 - A runner or component that is linked already is not touched. A folder or link that Nix did not create is never
   replaced (a warning is printed); links of runners and components that are no longer declared are removed.
-- A prefix that exists is not rebuilt. A new one is created the way Cask does it (`wineboot --init`, `cask.json`).
+- A prefix that exists and is whole is not rebuilt. Whole means: a usable `cask.json`, non-empty registry files
+  (`system.reg`, `user.reg`, `userdef.reg`) of the right architecture, `kernel32.dll` and `ntdll.dll` in `system32`,
+  and `syswow64` for `win64`. What is installed in the prefix (games, saves, your own registry changes) is not
+  checked. **A prefix that is not whole, or a folder with no usable `cask.json`, is skipped** with a warning in the
+  journal (this is not an error of the run): nothing in it is changed, and the runners, components and the other
+  prefixes are handled as usual. To have it created again, move it away or delete it. A missing prefix is created
+  the way Cask does it (`wineboot --init`, `cask.json`).
   If `runner` differs from the one in `cask.json`, the prefix is switched like Cask does (`wineboot -u`). `arch` cannot
   be changed in place: the old prefix is renamed to `<name>.old-<arch>-<date>` (nothing is deleted) and a new one is
   created.
 - A winetricks verb that is in the prefix's `winetricks.log` is not run again; the verbs run in the given order, and
   a failed one stops the rest of that prefix (the next run retries it). winetricks downloads its own files into
   `<dataDir>/data/winetricks/cache`; they are checked by winetricks, not by Nix.
+- `env` goes to the environment variables of the prefix in `cask.json`, `dllOverrides` to the registry (after the
+  components, so they win over the overrides of a component). Only what Nix put there is ever changed or removed;
+  what you set in Cask yourself stays. The list of what Nix manages is `cask-nix-state.json` in the prefix.
 - A component version is applied the way Cask applies it (DLLs copied with `*.cask-bak` backups, `native,builtin`
   overrides in the registry, the files recorded in `cask.json`); a changed version rolls the old one back first.
   Components that the configuration does not mention are left as they are, as are prefixes that are not listed.
