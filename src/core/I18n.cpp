@@ -1,7 +1,5 @@
 #include "I18n.h"
 
-#include "Config.h"
-
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -67,9 +65,6 @@ QString g_current = QStringLiteral("en");
 
 QString findFile(const QString& code)
 {
-    const QString external = Config::instance().langDir() + "/" + code + ".json";
-    if (QFileInfo::exists(external))
-        return external;
     const QString embedded = ":/lang/" + code + ".json";
     return QFileInfo::exists(embedded) ? embedded : QString();
 }
@@ -87,19 +82,15 @@ QString readName(const QString& path, const QString& fallback)
 
 QList<Language> available()
 {
+    // English is the source language of the code and always comes first.
     QList<Language> out{{QStringLiteral("en"), QStringLiteral("English")}};
-    QSet<QString> seen{QStringLiteral("en")};
-    const QStringList dirs{Config::instance().langDir(), QStringLiteral(":/lang")};
-    for (const QString& dir : dirs) {
-        const QDir d(dir);
-        const QStringList files = d.entryList({QStringLiteral("*.json")}, QDir::Files, QDir::Name);
-        for (const QString& f : files) {
-            const QString code = QFileInfo(f).completeBaseName();
-            if (code.isEmpty() || seen.contains(code))
-                continue;
-            seen.insert(code);
-            out.append({code, readName(d.filePath(f), code)});
-        }
+    const QDir d(QStringLiteral(":/lang"));
+    const QStringList files = d.entryList({QStringLiteral("*.json")}, QDir::Files, QDir::Name);
+    for (const QString& f : files) {
+        const QString code = QFileInfo(f).completeBaseName();
+        if (code.isEmpty() || code == QLatin1String("en"))
+            continue;
+        out.append({code, readName(d.filePath(f), code)});
     }
     return out;
 }

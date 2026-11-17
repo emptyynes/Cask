@@ -39,7 +39,6 @@ QString Config::store(const QString& absPath) const
 }
 
 QString Config::libDir() const { return m_root + "/lib"; }
-QString Config::langDir() const { return m_root + "/lang"; }
 
 QString Config::language() const
 {
@@ -94,7 +93,6 @@ void Config::setPrefixesDir(const QString& absPath)
 void Config::ensureLayout() const
 {
     QDir().mkpath(libDir());
-    QDir().mkpath(langDir());
     QDir().mkpath(prefixesDir());
     QDir().mkpath(runnersDir());
     QDir().mkpath(dataDir() + "/winetricks");

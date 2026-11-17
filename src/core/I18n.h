@@ -3,9 +3,9 @@
 #include <QList>
 #include <QString>
 
-// Localization via plain JSON files: {"_name": "Русский", "English text": "Translation", ...}.
-// Source strings in code are English, so English needs no file.
-// Files are looked up in <Cask root>/lang/<code>.json (takes priority) and in the embedded resources :/lang/.
+// Localization via plain JSON files embedded into the binary (resources/lang/<code>.json):
+// {"_name": "Русский", "English text": "Translation", ...}.
+// Source strings in code are English; en.json is the reference template and is never loaded.
 namespace I18n {
 
 struct Language {

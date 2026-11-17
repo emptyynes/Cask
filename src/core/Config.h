@@ -22,7 +22,6 @@ public:
 
     QString rootDir() const { return m_root; }
     QString libDir() const;
-    QString langDir() const;  // optional external translations: lang/<code>.json
     QString dataDir() const;
     QString prefixesDir() const;
     QString runnersDir() const;

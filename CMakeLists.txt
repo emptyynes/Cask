@@ -52,7 +52,7 @@ target_compile_definitions(cask PRIVATE CASK_VERSION="${CASK_VERSION}")
 target_include_directories(cask PRIVATE src)
 target_link_libraries(cask PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
 
-# Portable layout: Cask/{cask, lib/, lang/, data/, prefixes/}
+# Portable layout: Cask/{cask, lib/, data/, prefixes/}
 # The binary looks for dependencies in ./lib next to itself.
 set_target_properties(cask PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/Cask
@@ -62,7 +62,6 @@ set_target_properties(cask PROPERTIES
 
 set(CASK_LAYOUT_DIRS
     lib
-    lang
     data/runners
     data/dxvk
     data/d7vk

@@ -6,6 +6,7 @@ keys, and with the same placeholders (%1, %2...) in the translation.
 
     scripts/check-translations.py            check (exit code 1 on errors)
     scripts/check-translations.py --list     print a template for a new language
+    scripts/check-translations.py --sync-en  regenerate resources/lang/en.json (reference template)
 """
 import json
 import pathlib
@@ -35,6 +36,14 @@ def extract():
 def main():
     keys = extract()
 
+    en_path = ROOT / "resources" / "lang" / "en.json"
+    en_expected = {"_name": "English", **{k: k for k in keys}}
+
+    if "--sync-en" in sys.argv:
+        en_path.write_text(json.dumps(en_expected, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"{en_path.relative_to(ROOT)} updated ({len(keys)} strings)")
+        return 0
+
     if "--list" in sys.argv:
         out = {"_name": ""}
         out.update({k: "" for k in keys})
@@ -49,6 +58,12 @@ def main():
     errors = 0
     for f in files:
         data = json.loads(f.read_text(encoding="utf-8"))
+        if f == en_path:
+            # The reference template: every string maps to itself.
+            if data != en_expected:
+                print("en.json is out of date, run: scripts/check-translations.py --sync-en")
+                errors += 1
+            continue
         if not data.get("_name"):
             print(f"{f.name}: missing _name")
             errors += 1

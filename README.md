@@ -10,7 +10,6 @@ Cask/
 ├── cask            the binary
 ├── cask.ini        settings (created next to the binary)
 ├── lib/            bundled dependencies (Qt etc.), RPATH = $ORIGIN/lib
-├── lang/           optional translations <code>.json (see below)
 ├── data/
 │   ├── runners/<name>/bin/wine      Wine builds
 │   ├── d7vk/<version>/{x64,x32}/*.dll
@@ -103,9 +102,10 @@ English and Russian. The system language is used by default and can be changed i
 restart. Strings in the code are English; translations live in `resources/lang/<code>.json` (embedded
 into the binary).
 
-To add a language without rebuilding, put `Cask/lang/<code>.json` like
-`{"_name": "Deutsch", "Settings": "Einstellungen", ...}` next to the binary. Untranslated strings stay in
-English. `python3 scripts/check-translations.py --list` prints a skeleton with all strings.
+To add a language, copy `resources/lang/en.json` to `resources/lang/<code>.json`, set `_name` to the
+language's own name, translate the values and list the file in `resources/cask.qrc`. Untranslated strings stay
+in English. `python3 scripts/check-translations.py` checks the files; `--sync-en` regenerates `en.json` after
+strings in the code change.
 
 ## Building
 
